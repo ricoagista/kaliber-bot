@@ -1,26 +1,30 @@
 import { serve } from '@hono/node-server';
-import { Hono } from 'hono';
+import { createApi, type WaControl } from './api.js';
 import { assertStartupConfig, loadEnv } from './config.js';
-import { countMessagesSince, initDb, pruneStorage } from './db.js';
+import { initDb, pruneStorage } from './db.js';
 import { logger } from './logger.js';
 import { initSettings } from './settings.js';
 
 const startedAt = Date.now();
 
-export function createApp(): Hono {
-  const app = new Hono();
-
-  app.get('/healthz', (c) => {
-    return c.json({
-      ok: true,
-      uptimeSec: Math.round((Date.now() - startedAt) / 1000),
-      rssMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
-      messagesToday: countMessagesSince(new Date().setHours(0, 0, 0, 0)),
-    });
-  });
-
-  return app;
-}
+const waPlaceholder: WaControl = {
+  async snapshot() {
+    return {
+      state: 'disconnected',
+      qrDataUrl: null,
+      pairingCode: null,
+      me: null,
+      lastError: 'WhatsApp belum diinisialisasi',
+      reconnectAttempt: 0,
+    };
+  },
+  async requestPairing() {
+    throw new Error('WhatsApp belum diinisialisasi');
+  },
+  async logout() {
+    throw new Error('WhatsApp belum diinisialisasi');
+  },
+};
 
 function main(): void {
   const env = loadEnv();
@@ -37,7 +41,7 @@ function main(): void {
     }
   }, 60 * 60 * 1000).unref();
 
-  const app = createApp();
+  const app = createApi({ wa: waPlaceholder, startedAt });
   const server = serve({ fetch: app.fetch, port: env.port, hostname: '0.0.0.0' }, (info) => {
     logger.warn({ port: info.port }, 'kaliber-bot http siap');
   });

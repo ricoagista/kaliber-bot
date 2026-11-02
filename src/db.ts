@@ -134,6 +134,39 @@ export function countMessagesSince(since: number): number {
   return Number(row?.n ?? 0);
 }
 
+export function countLogsSince(since: number, statuses: string[]): number {
+  if (statuses.length === 0) return 0;
+  const placeholders = statuses.map(() => '?').join(', ');
+  const row = getDb()
+    .prepare(`SELECT COUNT(*) AS n FROM logs WHERE ts >= ? AND status IN (${placeholders})`)
+    .get(since, ...statuses) as { n: number } | undefined;
+  return Number(row?.n ?? 0);
+}
+
+export function getRecentLogs(limit = 100): LogRow[] {
+  const safeLimit = Math.min(500, Math.max(1, Math.floor(limit)));
+  return getDb()
+    .prepare(
+      'SELECT id, ts, chat_id, message, reply, status, latency_ms, model FROM logs ORDER BY ts DESC, id DESC LIMIT ?',
+    )
+    .all(safeLimit) as unknown as LogRow[];
+}
+
+export function countActiveStrikes(since: number): number {
+  const row = getDb().prepare('SELECT COUNT(*) AS n FROM strikes WHERE ts >= ?').get(since) as
+    | { n: number }
+    | undefined;
+  return Number(row?.n ?? 0);
+}
+
+export function countActiveMutes(now: number): number {
+  const row = getDb().prepare('SELECT COUNT(*) AS n FROM mutes WHERE until > ?').get(now) as
+    | { n: number }
+    | undefined;
+  return Number(row?.n ?? 0);
+}
+
+
 /** Hapus data lama agar storage STB tidak membengkak. */
 export function pruneStorage(now: number = Date.now()): void {
   const db = getDb();
