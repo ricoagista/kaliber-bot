@@ -10,35 +10,6 @@ export interface SanitizeResult {
   truncated: boolean;
 }
 
-const shingleCache = new Map<string, Set<string>>();
-const SHINGLE_SIZE = 8;
-
-function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-}
-
-function shingles(tokens: string[]): Set<string> {
-  const out = new Set<string>();
-  for (let i = 0; i + SHINGLE_SIZE <= tokens.length; i++) {
-    out.add(tokens.slice(i, i + SHINGLE_SIZE).join(' '));
-  }
-  return out;
-}
-
-function systemShingles(systemPrompt: string): Set<string> {
-  const cached = shingleCache.get(systemPrompt);
-  if (cached) return cached;
-  const result = shingles(tokenize(systemPrompt));
-  if (shingleCache.size > 4) shingleCache.clear();
-  shingleCache.set(systemPrompt, result);
-  return result;
-}
-
 /** Buang blok <think>...</think> (termasuk yang tidak tertutup). */
 export function stripThink(text: string): string {
   return text
@@ -48,6 +19,11 @@ export function stripThink(text: string): string {
 
 const INTERNAL_TAG = /<\/?(?:info_kaliber|pesan_user|system|assistant|think)\b[^>]*>/gi;
 
+/**
+ * Deteksi pola kredensial dan rahasia yang jelas.
+ * Jangan membandingkan jawaban dengan seluruh system prompt karena
+ * system prompt juga memuat knowledge base yang memang boleh dijawab.
+ */
 const SECRET_PATTERNS: RegExp[] = [
   /\bsk-[A-Za-z0-9_-]{10,}\b/,
   /\bBearer\s+\S+/i,
@@ -55,14 +31,8 @@ const SECRET_PATTERNS: RegExp[] = [
   /\bADMIN_TOKEN\b/,
 ];
 
-function leaksPrompt(output: string, systemPrompt: string): boolean {
-  if (SECRET_PATTERNS.some((re) => re.test(output))) return true;
-  const known = systemShingles(systemPrompt);
-  if (known.size === 0) return false;
-  for (const shingle of shingles(tokenize(output))) {
-    if (known.has(shingle)) return true;
-  }
-  return false;
+function leaksPrompt(output: string, _systemPrompt: string): boolean {
+  return SECRET_PATTERNS.some((re) => re.test(output));
 }
 
 function toWhatsAppMarkdown(text: string): string {
@@ -79,8 +49,11 @@ function toWhatsAppMarkdown(text: string): string {
 }
 
 /**
- * Bersihkan jawaban model: buang tag internal, deteksi kebocoran prompt/rahasia,
- * ubah markdown, dan potong panjangnya.
+ * Bersihkan jawaban model:
+ * - Buang tag internal dan blok think.
+ * - Deteksi kredensial/rahasia.
+ * - Ubah markdown WhatsApp.
+ * - Batasi panjang jawaban.
  */
 export function sanitizeOutput(raw: string, options: SanitizeOptions): SanitizeResult {
   const maxChars = options.maxChars ?? 1500;
@@ -93,16 +66,22 @@ export function sanitizeOutput(raw: string, options: SanitizeOptions): SanitizeR
 
   text = toWhatsAppMarkdown(text);
   let truncated = false;
+
   if (text.length > maxChars) {
     text = text.slice(0, maxChars);
+
     // Jangan potong di tengah surrogate pair.
     const last = text.charCodeAt(text.length - 1);
-    if (last >= 0xd800 && last <= 0xdbff) text = text.slice(0, -1);
+    if (last >= 0xd800 && last <= 0xdbff) {
+      text = text.slice(0, -1);
+    }
+
     truncated = true;
   }
 
   if (text.trim() === '') {
     return { text: options.fallbackText, leaked: false, truncated };
   }
+
   return { text, leaked: false, truncated };
 }

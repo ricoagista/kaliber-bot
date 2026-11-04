@@ -8,7 +8,6 @@ Image=localhost/kaliber-bot:latest
 ContainerName=kaliber-bot
 AutoUpdate=none
 Network=host
-PublishPort=127.0.0.1:3000:3000
 Volume=kaliber-data:/data
 EnvironmentFile=%h/.config/kaliber-bot/env
 Environment=TZ=Asia/Jakarta
@@ -16,16 +15,9 @@ Memory=256m
 LogDriver=journald
 NoNewPrivileges=true
 
-# Health check dijalankan lewat podman inspect + healthcheck binary
-
 [Service]
 Restart=always
 TimeoutStartSec=120
 
 [Install]
 WantedBy=default.target
-
-HealthCmd=wget -q -O /dev/null http://127.0.0.1:3000/healthz
-HealthInterval=30s
-HealthStartPeriod=20s
-HealthRetries=3

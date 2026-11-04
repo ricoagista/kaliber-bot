@@ -89,6 +89,7 @@ Jalankan:
 ```bash
 npm run build
 node --max-old-space-size=128 dist/index.js
+node --env-file=.env --max-old-space-size=128 dist/index.js (.env)
 ```
 
 Buka `http://127.0.0.1:3000`, tempel `ADMIN_TOKEN`. QR WhatsApp muncul di Dashboard
