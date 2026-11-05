@@ -11,11 +11,15 @@ di STB.
 ## Fitur
 
 - Tanya jawab WhatsApp (chat pribadi dan grup) memakai LLM lokal 9router.
-- Web admin satu halaman: Dashboard, Prompt, Knowledge, Model, Guard, Uji Coba, Log.
+- Web admin satu halaman: Dashboard, Prompt, Knowledge, Model, **Provider**, Guard, Uji Coba, Log.
 - Semua pengaturan disimpan di SQLite dan **langsung berlaku tanpa restart**.
 - QR login + pairing code, reconnect otomatis dengan backoff.
 - Pengamanan berlapis: pemisahan instruksi/data, filter regex injeksi, strike/mute,
   rate limit, sanitasi output, dan deteksi kebocoran prompt.
+- **Multi-provider & multi-key**: rotasi key round-robin, cooldown otomatis saat 429/401/5xx.
+- **Enkripsi key**: API key dienkripsi AES-256-GCM (kunci dari `SECRET_KEY`), tidak pernah keluar dalam bentuk plaintext.
+- **Password reveal**: password hanya diatur lewat `REVEAL_PASSWORD` di `.env` (minimal 12 karakter), dipakai untuk membuka key asli, dengan audit percobaan berhasil/gagal.
+- **Level log dari web**: `LOG_LEVEL` hanya nilai awal; level bisa diubah langsung dari Dashboard.
 - Tanpa dependency berat: `node:sqlite`, tanpa ORM, tanpa bundler, tanpa CDN.
 
 ## Arsitektur singkat
@@ -38,25 +42,30 @@ Keputusan desain utama:
   SQLite, log, atau respons `GET /api/settings`.
 - **LLM tanpa tools**; dampak prompt injection dibatasi pada teks balasan.
 - **Settings di-cache di memori**; menulis lewat API langsung memperbarui cache.
+- **Kunci enkripsi diturunkan sekali** dari `SECRET_KEY` lalu di-cache; key yang sudah
+  didekripsi juga di-cache di memori dan diinvalidasi saat key diubah/dihapus, sehingga
+  tidak ada scrypt per pesan. Record format lama dimigrasikan sekali saat start.
 
 ## Struktur proyek
 
 ```
 src/
   index.ts      bootstrap: DB, settings, WA, HTTP
-  config.ts     env, default settings, template prompt
+  config.ts     env, default settings, template prompt, assert SECRET_KEY
   db.ts         node:sqlite + migrasi + prune
   settings.ts   get/set settings + cache
+  crypto.ts     enkripsi AES-256-GCM, hash scrypt
+  providers.ts  provider/key CRUD, LlmContext round-robin
   wa.ts         Baileys: QR/pairing, reconnect, terima/kirim
   pipeline.ts   alur pesan -> balasan (tanpa Baileys)
   guard.ts      normalisasi, rate limit, injeksi, strike/mute
   prompt.ts     system prompt + messages
-  llm.ts        klien 9router, timeout/retry/fallback
+  llm.ts        klien LLM multi-provider, timeout/retry/fallback
   sanitize.ts   filter output + deteksi kebocoran
   memory.ts     riwayat per nomor
   queue.ts      serial per nomor + konkurensi global 2
   api.ts        route /api/* + auth + validasi
-  logger.ts     pino + masking nomor
+  logger.ts     pino
 public/index.html   web admin (vanilla JS/CSS, dark mode)
 knowledge/kaliber.template.md
 scripts/test-injection.ts
@@ -65,51 +74,171 @@ deploy/Containerfile
 deploy/kaliber-bot.container
 ```
 
-## Menjalankan lokal
+## Menjalankan lokal (tanpa Podman)
 
-Prasyarat: **Node.js >= 22.13** (butuh `node:sqlite`), npm.
+Cukup **satu proses Node** — tidak perlu container, Podman, atau Docker. Cocok untuk
+mencoba bot di laptop/PC sebelum deploy ke STB.
+
+Prasyarat:
+
+- **Node.js >= 22.13** (wajib, karena memakai `node:sqlite` bawaan Node). Cek dengan
+  `node -v`.
+- npm (ikut terpasang bersama Node).
+- Internet untuk login WhatsApp.
+- Opsional: 9router/LLM OpenAI-compatible yang berjalan lokal. Tanpa LLM bot tetap
+  hidup dan menjawab dengan `fallback_text`.
+
+### 1. Install dependency
 
 ```bash
 npm ci
-cp .env.example .env          # Windows: copy .env.example .env
 ```
 
-Isi `.env` minimal:
+Kalau `package-lock.json` belum ada, pakai `npm install`.
+
+### 2. Buat file `.env`
+
+`.env` **tidak dibaca otomatis** oleh aplikasi; nanti harus dijalankan dengan
+`--env-file=.env`.
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Windows CMD:
+
+```bat
+copy .env.example .env
+```
+
+Linux/macOS:
+
+```bash
+cp .env.example .env
+```
+
+Lalu edit `.env`. Isi minimal untuk lokal:
 
 ```text
+PORT=3000
+DATA_DIR=./data
 ADMIN_TOKEN=token-acak-minimal-24-karakter
+SECRET_KEY=kunci-panjang-minimal-32-karakter
+REVEAL_PASSWORD=password-reveal-minimal-12-karakter
 ROUTER_URL=http://127.0.0.1:20128/v1
 ROUTER_KEY=isi-api-key-9router
 DEFAULT_MODEL=nama-model-atau-combo
-DATA_DIR=./data
+LOG_LEVEL=warn
 ```
 
-Jalankan:
+Catatan penting untuk lokal:
+
+- `DATA_DIR=./data` — **jangan** pakai `/data` (itu path di dalam container). Folder
+  `data/` dibuat otomatis dan berisi `kaliber.db` + sesi WhatsApp `wa-auth/`.
+- `ROUTER_URL` default di kode adalah `http://host.containers.internal:20128/v1`, yang
+  **tidak bisa dipakai di luar container**. Untuk lokal isi `http://127.0.0.1:20128/v1`
+  (atau IP/port 9router kamu), atau kosongkan lalu atur provider lewat web admin.
+- `ROUTER_KEY` boleh kosong kalau 9router tanpa auth.
+- `REVEAL_PASSWORD` minimal 12 karakter dan **hanya** dibaca dari `.env`. Ini password
+  untuk membuka isi key asli di web. Kalau kosong, tombol “Lihat key” akan menolak.
+  Mengubahnya butuh restart bot.
+- `ADMIN_TOKEN` minimal 24 karakter; `SECRET_KEY` minimal 32 karakter. Bot menolak
+  start kalau kurang.
+
+Buat nilai acak dengan Node (bisa di PowerShell/bash):
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Jalankan dua kali: sekali untuk `ADMIN_TOKEN`, sekali untuk `SECRET_KEY`.
+
+### 3. Build
 
 ```bash
 npm run build
-node --max-old-space-size=128 dist/index.js
-node --env-file=.env --max-old-space-size=128 dist/index.js (.env)
 ```
 
-Buka `http://127.0.0.1:3000`, tempel `ADMIN_TOKEN`. QR WhatsApp muncul di Dashboard
-(setara login WhatsApp > Perangkat tertaut). Tanpa layar, isi nomor di kolom pairing
-code lalu masukkan kode 8 karakter di WhatsApp.
+Wajib dijalankan setiap kali file di `src/` berubah, karena yang dieksekusi adalah
+hasil kompilasi di `dist/`. Perubahan `public/index.html` **tidak** perlu build —
+cukup refresh browser.
 
-> Bot menolak start kalau `ADMIN_TOKEN` kosong atau kurang dari 24 karakter.
+### 4. Jalankan bot
+
+```bash
+node --env-file=.env --max-old-space-size=128 dist/index.js
+```
+
+Perintah yang sama berlaku di Windows PowerShell, CMD, Linux, dan macOS. Tanpa
+`--env-file=.env`, `ADMIN_TOKEN`/`SECRET_KEY` tidak terbaca dan bot akan menolak start.
+
+Terminal harus tetap terbuka; hentikan dengan `Ctrl+C`.
+
+### 5. Buka web admin
+
+Buka `http://127.0.0.1:3000`, lalu tempel `ADMIN_TOKEN` dari `.env`. QR WhatsApp muncul
+di Dashboard (setara WhatsApp > Perangkat tertaut). Tanpa layar, isi nomor di kolom
+pairing code lalu masukkan kode 8 karakter di WhatsApp.
+
+Setelah masuk, atur model dan provider di tab **Model** dan **Provider**. Pengaturan
+disimpan di SQLite dan langsung berlaku tanpa restart.
+
+### Alur kerja saat mengubah kode
+
+```bash
+# ubah src/*.ts
+npm run build
+# Ctrl+C proses lama, lalu jalankan lagi:
+node --env-file=.env --max-old-space-size=128 dist/index.js
+```
+
+Untuk mengubah prompt, knowledge, model, provider, guard, atau level log, **tidak
+perlu** restart — cukup lewat web admin.
+
+### Reset data lokal
+
+Hentikan bot, lalu hapus folder data (hati-hati: sesi WhatsApp dan semua pengaturan
+hilang):
+
+```powershell
+Remove-Item -Recurse -Force .\data
+```
+
+```bash
+rm -rf ./data
+```
+
+### Kalau gagal start
+
+| Gejala | Penyebab / solusi |
+|---|---|
+| `ADMIN_TOKEN wajib diisi...` | `.env` tidak ikut dimuat (lupa `--env-file=.env`) atau token < 24 karakter |
+| `SECRET_KEY wajib diisi...` | Sama seperti di atas, atau `SECRET_KEY` < 32 karakter |
+| `Cannot find module 'node:sqlite'` | Node terlalu lama; pasang Node >= 22.13 |
+| `EADDRINUSE` | Port 3000 dipakai proses lain; ubah `PORT` di `.env` |
+| Bot jawab teks fallback | 9router/LLM tidak berjalan atau `ROUTER_URL`/model salah |
+| QR tidak muncul | Bot belum terhubung internet, atau sesi lama masih ada di `data/wa-auth` |
+
+> Bot menolak start kalau `ADMIN_TOKEN` kosong atau kurang dari 24 karakter, atau
+> `SECRET_KEY` kosong atau kurang dari 32 karakter. `REVEAL_PASSWORD` opsional, tetapi
+> kalau diisi harus minimal 12 karakter.
 
 ### Variabel env
 
 | Variabel | Default | Keterangan |
 |---|---|---|
-| `PORT` | `3000` | Port HTTP di dalam container |
-| `DATA_DIR` | `./data` | Lokasi SQLite + `wa-auth` (container: `/data`) |
+| `PORT` | `3000` | Port HTTP web admin (lokal maupun container) |
+| `DATA_DIR` | `./data` | Lokasi SQLite + `wa-auth` (lokal: `./data`, container: `/data`) |
 | `TZ` | `Asia/Jakarta` | Zona waktu proses |
 | `ADMIN_TOKEN` | — | **Wajib**, minimal 24 karakter; rahasia lapis dalam |
+| `SECRET_KEY` | — | **Wajib**, minimal 32 karakter; kunci enkripsi API key |
+| `REVEAL_PASSWORD` | kosong | Opsional, minimal 12 karakter; password buka key asli (hanya dari env) |
 | `ROUTER_URL` | `http://host.containers.internal:20128/v1` | Base URL 9router, **lokal** |
 | `ROUTER_KEY` | kosong | API key 9router (opsional bila 9router tanpa auth) |
 | `DEFAULT_MODEL` | kosong | Seed `model` pada run pertama |
-| `LOG_LEVEL` | `warn` | Level pino (opsional) |
+| `LOG_LEVEL` | `warn` | Level log awal; setelah itu diubah lewat web (Dashboard) |
 
 Env hanya dipakai untuk **seed** awal dan rahasia. Setelah itu ubah lewat web.
 
@@ -135,30 +264,45 @@ CDN, dan mendukung dark mode.
 Tab:
 
 - **Dashboard** — status WA, QR, pairing code, ON/OFF bot, logout, uptime, RSS,
-  jumlah pesan/penahanan hari ini, strike, mute.
+  jumlah pesan/penahanan hari ini, strike, mute, level log server.
 - **Prompt** — system prompt + kontak + teks fallback/penolakan + `!info`/`!help`,
   reset ke default.
 - **Knowledge** — editor knowledge + penghitung karakter (peringatan > 12.000).
-- **Model** — model utama, fallback (satu per baris), temperature, max tokens,
-  giliran riwayat, tes koneksi 9router.
+- **Model** — pilihan model diambil dari provider aktif (dropdown/datalist), plus
+  fallback (satu per baris), temperature, max tokens, giliran riwayat, tes koneksi LLM.
+- **Provider** — kelola provider LLM (CRUD), isi API key langsung saat menambah
+  provider (opsional, label `primary`), tambah/hapus key lain, toggle aktif/nonaktif,
+  prioritas, lihat key (verifikasi password reveal), lihat daftar model provider, tes
+  koneksi. Password reveal **tidak** diatur di sini, melainkan lewat `.env`.
 - **Guard** — saklar chat/grup, allowlist, batas panjang, rate limit, cooldown grup,
   strike/mute, blocklist/allowlist, regex injeksi (divalidasi sebelum simpan).
 - **Uji Coba** — memanggil `/api/test` dengan `chat_id=admin-test`; menampilkan
   status, model, flag guard, dan latensi tanpa mengirim ke WhatsApp.
-- **Log** — 100 pesan terakhir dengan nomor tersamarkan.
+- **Log** — 100 pesan terakhir dengan nomor lengkap (tanpa penyamaran), plus 50 entri
+  audit reveal key terakhir (berhasil/gagal, IP, hasil, tanpa isi key).
 
 ### Endpoint
 
 ```text
-GET/PUT /api/settings     GET  /api/status
-POST    /api/wa/pairing   POST /api/wa/logout
-POST    /api/bot/toggle   POST /api/test
-GET     /api/logs         POST /api/llm/ping
+GET/PUT /api/settings           GET    /api/status
+GET     /api/models             GET    /api/audit
+POST    /api/wa/pairing         POST   /api/wa/logout
+POST    /api/bot/toggle         POST   /api/test
+GET     /api/logs               POST   /api/llm/ping
+GET     /api/providers          POST   /api/providers
+PUT     /api/providers/:id      DELETE /api/providers/:id
+POST    /api/providers/:id/toggle       POST /api/providers/:id/test
+GET     /api/providers/:id/models
+POST    /api/providers/:id/keys         DELETE /api/providers/:id/keys/:keyId
+POST    /api/providers/:id/keys/:keyId/toggle
+POST    /api/keys/:keyId/reveal
 GET     /healthz
 ```
 
-Body maksimum 64 KB. `GET /api/settings` tidak pernah mengembalikan `ROUTER_KEY`
-maupun `ADMIN_TOKEN`.
+Body maksimum 64 KB. `GET /api/settings` tidak pernah mengembalikan `ROUTER_KEY`,
+`ADMIN_TOKEN`, atau `SECRET_KEY`. Key hanya bisa dilihat lewat `/api/keys/:keyId/reveal`
+dengan `REVEAL_PASSWORD` dari `.env`. `GET /api/models` mengambil daftar model dari
+setiap provider aktif memakai key yang tersimpan; key tidak pernah dikirim ke browser.
 
 ## Alur pesan
 
@@ -205,6 +349,8 @@ PORT=3000
 DATA_DIR=/data
 TZ=Asia/Jakarta
 ADMIN_TOKEN=ganti-dengan-token-panjang-acak
+SECRET_KEY=ganti-dengan-kunci-panjang-minimal-32-karakter
+REVEAL_PASSWORD=ganti-dengan-password-reveal-minimal-12-karakter
 ROUTER_URL=http://host.containers.internal:20128/v1
 ROUTER_KEY=isi-api-key-9router
 DEFAULT_MODEL=nama-model-atau-combo
@@ -318,6 +464,11 @@ key kuat. Siapa pun yang bisa memanggil 9router bebas menghabiskan kuota model f
 Catatan: `--network=host` membuat bot listen di `0.0.0.0:3000`, sehingga port admin
 bisa terlihat dari LAN. Pakai hanya bila perlu dan batasi dengan firewall.
 
+Base URL di tab **Provider** boleh ditulis dengan atau tanpa `/v1`, dan jangan
+menyertakan `/chat/completions`. Aplikasi otomatis mencoba `/models` lalu
+`/v1/models` (dan sebaliknya), termasuk untuk chat completions. Kalau tetap 404,
+cek path yang dilayani 9router dan isi Base URL yang benar.
+
 Tes dari dalam container:
 
 ```bash
@@ -350,12 +501,15 @@ curl -s http://127.0.0.1:20128/v1/models
 - Semua `/api/*` butuh Bearer token constant-time; 5 login gagal/menit/IP → 429.
 - Header: CSP ketat, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`,
   `X-Content-Type-Options: nosniff`. Tanpa CORS.
-- Log web menyamarkan nomor menjadi `6281****7890`.
+- **Enkripsi key**: API key dienkripsi AES-256-GCM (kunci dari `SECRET_KEY`), tidak pernah keluar dalam bentuk plaintext. Kunci enkripsi diturunkan sekali lalu di-cache; key yang didekripsi juga di-cache di memori dan diinvalidasi saat key berubah.
+- **Password reveal**: `REVEAL_PASSWORD` (minimal 12 karakter) hanya dibaca dari `.env`, di-hash di memori, dan tidak pernah masuk SQLite atau respons web. Lihat key asli butuh password itu (scrypt, constant-time, rate limit, auto-hide 30s). Percobaan berhasil **dan gagal** dicatat ke audit log (waktu, key id, IP, hasil) tanpa isi key.
+- **Multi-provider**: rotasi key round-robin, cooldown otomatis saat 429/401/5xx.
 - Prompt injection: teks user tidak pernah masuk system prompt, tag di-escape,
   regex bisa diedit, strike/mute, dan output difilter terhadap kebocoran 8 kata
   system prompt serta pola `sk-...`, `Bearer ...`, `ROUTER_KEY`, `ADMIN_TOKEN`.
 - LLM tidak punya akses tools/file/internet/data pribadi.
 - Knowledge hanya bisa diubah admin (tanpa scraping/import eksternal).
+- Nomor WA ditampilkan lengkap di log (tanpa penyamaran) sesuai keputusan pemilik.
 
 ## Batasan & risiko yang diketahui
 

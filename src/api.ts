@@ -8,19 +8,41 @@ import {
   DEFAULT_SETTINGS,
   loadEnv,
   type Settings,
+  assertSecretKey,
 } from './config.js';
 import {
   countActiveMutes,
   countActiveStrikes,
   countLogsSince,
   countMessagesSince,
+  getRecentAudit,
   getRecentLogs,
+  getDb,
+  insertAudit,
 } from './db.js';
 import { invalidPatterns } from './guard.js';
 import { pingLlm } from './llm.js';
-import { logger } from './logger.js';
+import { isLogLevel, logger } from './logger.js';
 import { handleMessage } from './pipeline.js';
 import { getSetting, getSettings, isKnownSettingKey, updateSettings } from './settings.js';
+import {
+  listProviders,
+  getProvider,
+  createProvider,
+  updateProvider,
+  deleteProvider,
+  listKeys,
+  addKey,
+  deleteKey,
+  toggleKey,
+  toggleProvider,
+  createLlmContext,
+  updateKey,
+  type ProviderKeyRow,
+  type ProviderWithKeys,
+} from './providers.js';
+import { encryptKey, maskKey, decryptKeyCached, hasRevealPassword, verifyRevealPassword } from './crypto.js';
+import { endpointCandidates } from './endpoint.js';
 
 const env = loadEnv();
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -57,6 +79,7 @@ const STRING_LIMITS: Record<string, number> = {
   knowledge: 50_000,
   model: 200,
   trigger_prefix: 32,
+  log_level: 10,
 };
 
 const BOOLEAN_KEYS = new Set<string>([
@@ -124,6 +147,9 @@ export function validatePatch(input: unknown): ValidationResult {
       if (value.length > STRING_LIMITS[key]!) {
         return { ok: false, error: `${key} maksimal ${STRING_LIMITS[key]} karakter` };
       }
+      if (key === 'log_level' && !isLogLevel(value)) {
+        return { ok: false, error: 'log_level harus salah satu: trace, debug, info, warn, error, fatal' };
+      }
       patch[key] = value;
       continue;
     }
@@ -154,6 +180,11 @@ const loginFailures = new Map<string, number[]>();
 const FAILURE_WINDOW_MS = 60_000;
 const MAX_FAILURES = 5;
 
+// Rate limit untuk password reveal
+const revealFailures = new Map<string, number[]>();
+const REVEAL_FAILURE_WINDOW_MS = 60_000;
+const MAX_REVEAL_FAILURES = 5;
+
 function clientIp(headers: Headers): string {
   return (
     headers.get('cf-connecting-ip') ||
@@ -172,6 +203,18 @@ function recordFailure(ip: string, now: number): void {
   const list = loginFailures.get(ip) ?? [];
   list.push(now);
   loginFailures.set(ip, list);
+}
+
+function revealBlocked(ip: string, now: number): boolean {
+  const list = (revealFailures.get(ip) ?? []).filter((ts) => now - ts < REVEAL_FAILURE_WINDOW_MS);
+  revealFailures.set(ip, list);
+  return list.length >= MAX_REVEAL_FAILURES;
+}
+
+function recordRevealFailure(ip: string, now: number): void {
+  const list = revealFailures.get(ip) ?? [];
+  list.push(now);
+  revealFailures.set(ip, list);
 }
 
 function tokenMatches(given: string, expected: string): boolean {
@@ -196,6 +239,93 @@ async function readJson(c: { req: { json: () => Promise<unknown> } }): Promise<u
   } catch {
     return null;
   }
+}
+
+/** Jangan pernah kirim ciphertext key ke browser; cukup metadata + mask. */
+function publicKey(row: ProviderKeyRow): Omit<ProviderKeyRow, 'keyEncrypted'> {
+  const { keyEncrypted: _encrypted, ...rest } = row;
+  return rest;
+}
+
+const MODEL_FETCH_TIMEOUT_MS = 8_000;
+
+interface ProviderModels {
+  providerId: number;
+  provider: string;
+  models: string[];
+  error?: string;
+}
+
+/**
+ * Ambil daftar model dari endpoint /models provider memakai key aktif yang
+ * tersimpan. Key tidak pernah dikirim ke klien.
+ */
+async function fetchProviderModels(provider: ProviderWithKeys): Promise<ProviderModels> {
+  const key = provider.keys.find((item) => item.enabled);
+  let apiKey = '';
+  if (key) {
+    try {
+      apiKey = decryptKeyCached(key.id, key.keyEncrypted);
+    } catch {
+      return {
+        providerId: provider.id,
+        provider: provider.name,
+        models: [],
+        error: 'key tidak bisa didekripsi (SECRET_KEY mungkin berubah)',
+      };
+    }
+  }
+
+  const urls = endpointCandidates(provider.baseUrl, 'models');
+  if (urls.length === 0) {
+    return { providerId: provider.id, provider: provider.name, models: [], error: 'Base URL kosong' };
+  }
+
+  const headers: Record<string, string> = {};
+  if (apiKey) headers.authorization = `Bearer ${apiKey}`;
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers,
+        signal: AbortSignal.timeout(MODEL_FETCH_TIMEOUT_MS),
+      });
+      const text = await response.text().catch(() => '');
+      let models: string[] = [];
+      try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed?.data)) {
+          models = parsed.data
+            .map((item: { id?: unknown }) => (typeof item?.id === 'string' ? item.id : ''))
+            .filter(Boolean);
+        }
+      } catch {
+        // respons bukan JSON; status tetap dilaporkan
+      }
+      if (response.ok) {
+        return { providerId: provider.id, provider: provider.name, models };
+      }
+      // 404 bisa berarti prefix /v1 berbeda; coba kandidat berikutnya.
+      if (response.status !== 404) {
+        return { providerId: provider.id, provider: provider.name, models, error: `HTTP ${response.status}` };
+      }
+    } catch (err) {
+      return {
+        providerId: provider.id,
+        provider: provider.name,
+        models: [],
+        error: err instanceof Error ? err.message : 'gagal memuat model',
+      };
+    }
+  }
+
+  return {
+    providerId: provider.id,
+    provider: provider.name,
+    models: [],
+    error: 'HTTP 404 — endpoint /models tidak ditemukan. Coba tambahkan /v1 pada Base URL.',
+  };
 }
 
 export function createApi(deps: ApiDeps): Hono {
@@ -256,6 +386,7 @@ export function createApi(deps: ApiDeps): Hono {
       settings: getSettings(),
       defaults: DEFAULT_SETTINGS,
       limits: { knowledge_warn_chars: KNOWLEDGE_WARN_CHARS, body_bytes: BODY_LIMIT },
+      has_reveal_password: hasRevealPassword(),
     });
   });
 
@@ -358,17 +489,307 @@ export function createApi(deps: ApiDeps): Hono {
 
   app.post('/api/llm/ping', async (c) => {
     const settings = getSettings();
+    const llmContext = createLlmContext();
     const result = await pingLlm({
-      routerUrl: env.routerUrl,
-      routerKey: env.routerKey,
       model: settings.model,
       temperature: settings.temperature,
       maxTokens: 5,
+      llmContext,
     });
     return c.json(result);
   });
 
-  app.notFound((c) => c.json({ error: 'not found' }, 404));
+  // ---- Daftar model dari provider (untuk pilihan di web) ----
+  app.get('/api/models', async (c) => {
+    const providers = listProviders().filter((provider) => provider.enabled);
+    const results = await Promise.all(providers.map((provider) => fetchProviderModels(provider)));
+    const multiple = providers.length > 1;
+    const models = results.flatMap((result) =>
+      result.models.map((model) => ({
+        providerId: result.providerId,
+        provider: result.provider,
+        model,
+        value: multiple ? `${result.provider}/${model}` : model,
+      })),
+    );
+    const errors = results
+      .filter((result) => result.error)
+      .map((result) => ({
+        providerId: result.providerId,
+        provider: result.provider,
+        error: result.error,
+      }));
+    return c.json({ models, errors });
+  });
+
+  // ---- Provider management ----
+  app.get('/api/providers', (c) => {
+    const providers = listProviders().map((provider) => ({
+      ...provider,
+      keys: provider.keys.map(publicKey),
+    }));
+    return c.json({ providers });
+  });
+
+  app.post('/api/providers', async (c) => {
+    const body = await readJson(c);
+    if (!isRecord(body)) return c.json({ error: 'body JSON tidak valid' }, 400);
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    const baseUrl = typeof body.baseUrl === 'string' ? body.baseUrl.trim() : '';
+    const priority = typeof body.priority === 'number' ? body.priority : 0;
+    if (!name) return c.json({ error: 'nama provider wajib diisi' }, 400);
+    if (!baseUrl) return c.json({ error: 'base URL wajib diisi' }, 400);
+    try {
+      const provider = createProvider(name, baseUrl, priority);
+      logger.warn({ id: provider.id, name: provider.name }, 'provider ditambahkan');
+      return c.json({ ok: true, provider }, 201);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'gagal menambahkan provider';
+      return c.json({ error: message }, 400);
+    }
+  });
+
+  app.put('/api/providers/:id', async (c) => {
+    const id = Number.parseInt(c.req.param('id'), 10);
+    if (!Number.isFinite(id)) return c.json({ error: 'ID tidak valid' }, 400);
+    const body = await readJson(c);
+    if (!isRecord(body)) return c.json({ error: 'body JSON tidak valid' }, 400);
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    const baseUrl = typeof body.baseUrl === 'string' ? body.baseUrl.trim() : '';
+    if (!name) return c.json({ error: 'nama provider wajib diisi' }, 400);
+    if (!baseUrl) return c.json({ error: 'base URL wajib diisi' }, 400);
+    try {
+      const provider = updateProvider(id, {
+        name,
+        baseUrl,
+        enabled: typeof body.enabled === 'boolean' ? body.enabled : true,
+        priority: typeof body.priority === 'number' ? body.priority : 0,
+      });
+      if (!provider) return c.json({ error: 'provider tidak ditemukan' }, 404);
+      logger.warn({ id }, 'provider diperbarui');
+      return c.json({ ok: true, provider });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'gagal memperbarui provider';
+      return c.json({ error: message }, 400);
+    }
+  });
+
+  app.delete('/api/providers/:id', async (c) => {
+    const id = Number.parseInt(c.req.param('id'), 10);
+    if (!Number.isFinite(id)) return c.json({ error: 'ID tidak valid' }, 400);
+    const ok = deleteProvider(id);
+    if (!ok) return c.json({ error: 'provider tidak ditemukan' }, 404);
+    logger.warn({ id }, 'provider dihapus');
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/providers/:id/toggle', async (c) => {
+    const id = Number.parseInt(c.req.param('id'), 10);
+    if (!Number.isFinite(id)) return c.json({ error: 'ID tidak valid' }, 400);
+    const body = await readJson(c);
+    if (!isRecord(body)) return c.json({ error: 'body JSON tidak valid' }, 400);
+    const enabled = typeof body?.enabled === 'boolean' ? body.enabled : true;
+    const ok = toggleProvider(id, enabled);
+    if (!ok) return c.json({ error: 'provider tidak ditemukan' }, 404);
+    return c.json({ ok: true, enabled });
+  });
+
+  // Tes koneksi memakai key aktif yang tersimpan (tidak mengirim key ke klien).
+  app.post('/api/providers/:id/test', async (c) => {
+    const id = Number.parseInt(c.req.param('id'), 10);
+    if (!Number.isFinite(id)) return c.json({ error: 'ID tidak valid' }, 400);
+    const provider = getProvider(id);
+    if (!provider) return c.json({ error: 'provider tidak ditemukan' }, 404);
+
+    const started = Date.now();
+    const result = await fetchProviderModels(provider);
+    return c.json({
+      ok: !result.error,
+      provider: result.provider,
+      models: result.models,
+      latencyMs: Date.now() - started,
+      ...(result.error ? { error: result.error } : {}),
+    });
+  });
+
+  app.get('/api/providers/:id/keys', (c) => {
+    const id = Number.parseInt(c.req.param('id'), 10);
+    if (!Number.isFinite(id)) return c.json({ error: 'ID tidak valid' }, 400);
+    return c.json({ keys: listKeys(id).map(publicKey) });
+  });
+
+  app.get('/api/providers/:id/models', async (c) => {
+    const id = Number.parseInt(c.req.param('id'), 10);
+    if (!Number.isFinite(id)) return c.json({ error: 'ID tidak valid' }, 400);
+    const provider = getProvider(id);
+    if (!provider) return c.json({ error: 'provider tidak ditemukan' }, 404);
+    return c.json(await fetchProviderModels(provider));
+  });
+
+  app.post('/api/providers/:id/keys', async (c) => {
+    const id = Number.parseInt(c.req.param('id'), 10);
+    if (!Number.isFinite(id)) return c.json({ error: 'ID tidak valid' }, 400);
+    const body = await readJson(c);
+    if (!isRecord(body)) return c.json({ error: 'body JSON tidak valid' }, 400);
+    const label = typeof body.label === 'string' ? body.label.trim() : '';
+    const apiKey = typeof body.apiKey === 'string' ? body.apiKey : '';
+    if (!label) return c.json({ error: 'label wajib diisi' }, 400);
+    if (!apiKey) return c.json({ error: 'API key wajib diisi' }, 400);
+    const provider = getProvider(id);
+    if (!provider) return c.json({ error: 'provider tidak ditemukan' }, 400);
+    try {
+      const encrypted = encryptKey(apiKey);
+      const key = addKey(provider.id, label, encrypted, maskKey(apiKey));
+      if (!key) return c.json({ error: 'gagal menambahkan key' }, 500);
+      logger.warn({ keyId: key.id, providerId: provider.id }, 'key ditambahkan');
+      return c.json({ ok: true, key: publicKey(key) }, 201);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'gagal menambahkan key';
+      return c.json({ error: message }, 400);
+    }
+  });
+
+  app.put('/api/providers/:providerId/keys/:keyId', async (c) => {
+    const providerId = Number.parseInt(c.req.param('providerId'), 10);
+    const keyId = Number.parseInt(c.req.param('keyId'), 10);
+    if (!Number.isFinite(providerId) || !Number.isFinite(keyId)) return c.json({ error: 'ID tidak valid' }, 400);
+    const body = await readJson(c);
+    if (!isRecord(body)) return c.json({ error: 'body JSON tidak valid' }, 400);
+    const key = updateKey(keyId, body as Partial<{ label: string; enabled: boolean }>);
+    if (!key) return c.json({ error: 'key tidak ditemukan' }, 404);
+    return c.json({ ok: true, key: publicKey(key) });
+  });
+
+  app.delete('/api/providers/:providerId/keys/:keyId', async (c) => {
+    const keyId = Number.parseInt(c.req.param('keyId'), 10);
+    if (!Number.isFinite(keyId)) return c.json({ error: 'ID tidak valid' }, 400);
+    const ok = deleteKey(keyId);
+    if (!ok) return c.json({ error: 'key tidak ditemukan' }, 404);
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/providers/:id/keys/:keyId/toggle', async (c) => {
+    const keyId = Number.parseInt(c.req.param('keyId'), 10);
+    if (!Number.isFinite(keyId)) return c.json({ error: 'ID tidak valid' }, 400);
+    const body = await readJson(c);
+    if (!isRecord(body)) return c.json({ error: 'body JSON tidak valid' }, 400);
+    const enabled = typeof body?.enabled === 'boolean' ? body.enabled : true;
+    const ok = toggleKey(keyId, enabled);
+    if (!ok) return c.json({ error: 'key tidak ditemukan' }, 404);
+    return c.json({ ok: true, enabled });
+  });
+
+  app.post('/api/llm/test', async (c) => {
+    const body = await readJson(c);
+    if (!isRecord(body)) return c.json({ error: 'body JSON tidak valid' }, 400);
+    const baseUrl = typeof body.baseUrl === 'string' ? body.baseUrl.trim() : '';
+    const apiKey = typeof body.apiKey === 'string' ? body.apiKey : '';
+    const model = typeof body.model === 'string' ? body.model.trim() : 'ping';
+    if (!baseUrl) return c.json({ error: 'base URL wajib diisi' }, 400);
+    const url = `${baseUrl.replace(/\/+$/, '')}/models`;
+    try {
+      const headers: Record<string, string> = {};
+      if (apiKey) headers.authorization = `Bearer ${apiKey}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers,
+        signal: AbortSignal.timeout(15_000),
+      });
+      const ok = response.ok;
+      const text = await response.text().catch(() => '');
+      let models: string[] = [];
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed.data && Array.isArray(parsed.data)) {
+          models = parsed.data.map((m: any) => typeof m.id === 'string' ? m.id : '').filter(Boolean);
+        }
+      } catch {
+        // ignore parse errors
+      }
+      if (!ok) return c.json({ ok: false, error: `HTTP ${response.status}`, models });
+      return c.json({ ok: true, models });
+    } catch (err) {
+      return c.json({ ok: false, error: err instanceof Error ? err.message : 'gagal tes koneksi' }, 409);
+    }
+  });
+
+  // ---- Password reveal (verifikasi ulang untuk lihat key asli) ----
+  app.get('/api/audit', (c) => {
+    const entries = getRecentAudit(50).map((row) => ({
+      id: row.id,
+      ts: row.ts,
+      keyId: row.key_id,
+      success: Boolean(row.success),
+      ip: row.ip,
+      result: row.result,
+    }));
+    return c.json({ entries });
+  });
+
+  app.post('/api/keys/:keyId/reveal', async (c) => {
+    const keyId = Number.parseInt(c.req.param('keyId'), 10);
+    if (!Number.isFinite(keyId)) return c.json({ error: 'ID tidak valid' }, 400);
+
+    const now = Date.now();
+    const ip = clientIp(c.req.raw.headers);
+    const audit = (success: boolean, result: string): void => {
+      try {
+        insertAudit({ ts: now, keyId, success, ip, result });
+      } catch {
+        // audit tidak boleh menggagalkan reveal
+      }
+    };
+
+    if (revealBlocked(ip, now)) {
+      audit(false, 'rate_limited');
+      return c.json({ error: 'terlalu banyak percobaan reveal, coba lagi nanti' }, 429);
+    }
+
+    const body = await readJson(c);
+    if (!isRecord(body)) {
+      audit(false, 'bad_request');
+      return c.json({ error: 'body JSON tidak valid' }, 400);
+    }
+    const password = typeof body.password === 'string' ? body.password : '';
+    if (!password) {
+      recordRevealFailure(ip, now);
+      audit(false, 'no_password');
+      return c.json({ error: 'password wajib diisi' }, 400);
+    }
+
+    if (!hasRevealPassword()) {
+      recordRevealFailure(ip, now);
+      audit(false, 'not_configured');
+      return c.json({ error: 'password reveal belum diatur di .env' }, 403);
+    }
+
+    if (!verifyRevealPassword(password)) {
+      recordRevealFailure(ip, now);
+      audit(false, 'wrong_password');
+      logger.warn({ keyId, ip }, 'reveal key gagal: password salah');
+      return c.json({ error: 'password salah' }, 403);
+    }
+
+    const keyRow = getDb()
+      .prepare('SELECT id, label, key_encrypted FROM provider_keys WHERE id = ?')
+      .get(keyId) as { id: number; label: string; key_encrypted: string } | undefined;
+    if (!keyRow) {
+      audit(false, 'key_not_found');
+      return c.json({ error: 'key tidak ditemukan' }, 404);
+    }
+
+    let plainKey: string;
+    try {
+      plainKey = decryptKeyCached(keyRow.id, keyRow.key_encrypted);
+    } catch {
+      audit(false, 'decrypt_failed');
+      return c.json({ error: 'key tidak bisa didekripsi (SECRET_KEY mungkin berubah)' }, 400);
+    }
+
+    audit(true, 'ok');
+    c.header('Cache-Control', 'no-store');
+    return c.json({ ok: true, keyId: keyRow.id, label: keyRow.label, plainKey });
+  });
   app.onError((err, c) => {
     logger.error({ err }, 'error API');
     return c.json({ error: 'internal error' }, 500);

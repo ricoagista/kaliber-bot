@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { setSecretKey } from './crypto.js';
 
 export interface Settings {
   bot_enabled: boolean;
@@ -33,6 +34,7 @@ export interface Settings {
   blocklist: string[];
   allowlist: string[];
   allowlist_enabled: boolean;
+  log_level: string;
 }
 
 export const DEFAULT_SYSTEM_PROMPT = `Kamu adalah asisten resmi LSO Kaliber (UMM Informatika) di WhatsApp.
@@ -96,6 +98,7 @@ export const DEFAULT_SETTINGS: Settings = {
   blocklist: [],
   allowlist: [],
   allowlist_enabled: false,
+  log_level: 'warn',
 };
 
 export interface EnvConfig {
@@ -106,6 +109,8 @@ export interface EnvConfig {
   routerUrl: string;
   routerKey: string;
   defaultModel: string;
+  logLevel: string;
+  revealPassword: string;
 }
 
 function intFromEnv(raw: string | undefined, fallback: number): number {
@@ -122,6 +127,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): EnvConfig {
     routerUrl: (source.ROUTER_URL?.trim() || 'http://host.containers.internal:20128/v1').replace(/\/+$/, ''),
     routerKey: source.ROUTER_KEY ?? '',
     defaultModel: source.DEFAULT_MODEL?.trim() || '',
+    logLevel: source.LOG_LEVEL?.trim() || 'warn',
+    revealPassword: source.REVEAL_PASSWORD ?? '',
   };
 }
 
@@ -130,6 +137,18 @@ export function assertStartupConfig(cfg: EnvConfig): void {
   if (cfg.adminToken.length < 24) {
     throw new Error('ADMIN_TOKEN wajib diisi dan minimal 24 karakter. Lihat .env.example.');
   }
+  if (cfg.revealPassword && cfg.revealPassword.length < 12) {
+    throw new Error('REVEAL_PASSWORD minimal 12 karakter. Lihat .env.example.');
+  }
+}
+
+/** Tetapkan dan validasi SECRET_KEY; tolak start bila kosong atau kurang dari 32 karakter. */
+export function assertSecretKey(source: NodeJS.ProcessEnv = process.env): void {
+  const k = (source.SECRET_KEY ?? '').trim();
+  if (!k || k.length < 32) {
+    throw new Error('SECRET_KEY wajib diisi dan minimal 32 karakter. Lihat .env.example.');
+  }
+  setSecretKey(k);
 }
 
 const here = path.dirname(fileURLToPath(import.meta.url));

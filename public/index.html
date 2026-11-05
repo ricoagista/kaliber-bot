@@ -5,203 +5,981 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Kaliber Bot — Admin</title>
+<script>
+(function () {
+  var theme = 'dark';
+  try {
+    var saved = localStorage.getItem('kaliber_theme');
+    if (saved === 'light' || saved === 'dark') {
+      theme = saved;
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+      theme = 'light';
+    }
+  } catch (e) { /* localStorage bisa diblokir; pakai gelap */ }
+  document.documentElement.setAttribute('data-theme', theme);
+})();
+</script>
 <style>
   :root {
-    --bg: #f2f4f7;
-    --panel: #ffffff;
-    --fg: #101828;
-    --muted: #667085;
-    --line: #e4e7ec;
-    --accent: #0b7a5a;
-    --accent-fg: #ffffff;
-    --danger: #b42318;
-    --warn: #b54708;
-    --ok: #067647;
-    --radius: 12px;
-    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color-scheme: dark;
+
+    /* Palet terukur kaliber.or.id */
+    --canvas: #161a1d;
+    --ink: #ffffff;
+    --accent-1: #e5383b;
+    --neutral-1: #e5e7eb;
+    --neutral-2: #000000;
+
+    /* Tema gelap (default) */
+    --bg: #161a1d;
+    --surface: #15191c;
+    --surface-raised: #282b2e;
+    --border: #323538;
+    --border-strong: #e5e7eb;
+    --text: #ffffff;
+    --text-muted: #adafb0;
+    --accent: #e5383b;
+    --accent-hover: #b30000;
+    --accent-text: #ffffff;
+    --focus-ring: #ffffff;
+    --overlay: rgba(0, 0, 0, 0.76);
+    --glow: #ffffff;
+    --qr-bg: #ffffff;
+    --gradient: linear-gradient(135deg, rgb(200, 51, 56), rgb(41, 28, 51));
+
+    /* Status: palet asli tidak punya ramp semantik; dipetakan ke merah/putih/netral */
+    --success: #ffffff;
+    --warning: #e5e7eb;
+    --danger: #e5383b;
+    --info: #adafb0;
+
+    /* Tipografi */
+    --font-display: "Agency FB", "AgencyFB", "PT Sans Narrow", "Arial Narrow", Arial, sans-serif;
+    --font-heading: "PT Sans", "PT Sans Bold", Arial, sans-serif;
+    --font-mono: "Hack", "Cascadia Code", "JetBrains Mono", Consolas, "Courier New", monospace;
+    --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --fs-xs: 12px;
+    --fs-sm: 14px;
+    --fs-md: 16px;
+    --fs-lg: 20px;
+    --fs-xl: 30px;
+    --fs-2xl: 45px;
+    --fs-display: 60px;
+    --lh: 1.5;
+    --track-display: 4.8px;
+    --track-label: 1.6px;
+
+    /* Bentuk: sistem ini tidak memakai sudut membulat */
+    --radius-sm: 0px;
+    --radius: 0px;
+    --radius-lg: 0px;
+    --shadow: none;
+
+    /* Spasi (kelipatan 4) */
+    --s1: 4px;
+    --s2: 8px;
+    --s3: 12px;
+    --s4: 16px;
+    --s5: 24px;
+    --s6: 32px;
+    --s7: 40px;
+    --s8: 48px;
+    --s9: 56px;
+    --s10: 64px;
+
+    --sidebar-w: 240px;
+    --content-max: 1280px;
+    --control-h: 44px;
+    --focus-ring-width: 2px;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0e1116;
-      --panel: #161b22;
-      --fg: #e6edf3;
-      --muted: #9aa4b2;
-      --line: #2a313c;
-      --accent: #2ea482;
-      --accent-fg: #05130e;
-      --danger: #f97066;
-      --warn: #fdb022;
-      --ok: #5bd6a8;
-    }
+
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #fbfbfb;
+    --surface: #f1f1f1;
+    --surface-raised: #e9e9e9;
+    --border: #d8d8d8;
+    --border-strong: #d8d8d8;
+    --text: #1d1d1d;
+    --text-muted: #707070;
+    --accent: #e5383b;
+    --accent-hover: #b30000;
+    --accent-text: #ffffff;
+    --focus-ring: #8f8f8f;
+    --overlay: rgba(0, 0, 0, 0.76);
+    --glow: #8f8f8f;
+    --qr-bg: #ffffff;
+    --gradient: linear-gradient(135deg, rgb(200, 51, 56), rgb(41, 28, 51));
+    --success: #1d1d1d;
+    --warning: #707070;
+    --danger: #e5383b;
+    --info: #707070;
   }
+
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
     background: var(--bg);
-    color: var(--fg);
-    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--text);
+    font: var(--fs-md)/var(--lh) var(--font-mono);
     min-height: 100vh;
   }
-  header {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    padding: 14px 18px; border-bottom: 1px solid var(--line); background: var(--panel);
-    position: sticky; top: 0; z-index: 10;
-  }
-  .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
-  .brand h1 { font-size: 17px; margin: 0; letter-spacing: -0.2px; white-space: nowrap; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
-  .dot.ok { background: var(--ok); }
-  .dot.warn { background: var(--warn); }
-  .dot.bad { background: var(--danger); }
-  .header-actions { display: flex; align-items: center; gap: 8px; }
-  .badge {
-    font-size: 12px; padding: 4px 9px; border-radius: 999px;
-    border: 1px solid var(--line); color: var(--muted); white-space: nowrap;
-  }
-  main { max-width: 1040px; margin: 0 auto; padding: 18px 14px 64px; }
-  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 12px; }
+  body.modal-open { overflow: hidden; }
+  h1, h2, h3, h4, p { margin: 0; }
+  code, .mono { font-family: var(--font-mono); font-size: var(--fs-sm); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
   .hidden { display: none !important; }
+  .muted { color: var(--text-muted); }
+  .small { font-size: var(--fs-sm); }
+  .nowrap { white-space: nowrap; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
+
+  /* ---------- shell ---------- */
+  .app { display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); min-height: 100vh; background: var(--bg); }
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: var(--s5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--s5);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    z-index: 20;
+  }
+  .brand { display: flex; align-items: center; gap: var(--s3); min-width: 0; }
+  .brand-mark {
+    width: var(--s7); height: var(--s7); flex: none;
+    display: grid; place-items: center;
+    background: var(--gradient);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    font-family: var(--font-display);
+    font-size: var(--fs-2xl);
+    line-height: 1;
+  }
+  .brand-text strong {
+    display: block;
+    font-family: var(--font-display);
+    font-size: var(--fs-lg);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .brand-text small { display: block; color: var(--text-muted); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 1px; }
+
+  .tabs { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--border); scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    appearance: none;
+    display: flex; align-items: center; gap: var(--s2);
+    min-height: var(--control-h);
+    width: 100%;
+    padding: var(--s2) var(--s3);
+    border: 0;
+    border-left: 3px solid transparent;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    line-height: 1.43;
+    text-align: left;
+    cursor: pointer;
+    text-transform: none;
+  }
+  .tab-btn:hover { background: var(--surface-raised); color: var(--text); }
+  .tab-btn.active { background: var(--accent); border-left-color: var(--ink); color: var(--ink); font-weight: 600; }
+  .tab-btn:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: 2px; }
+
+  .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: var(--s3); }
+  .wa-status {
+    display: flex; align-items: center; gap: var(--s2);
+    font-size: var(--fs-sm); color: var(--text-muted);
+    border-top: 1px solid var(--border); padding-top: var(--s3);
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .dot { width: 9px; height: 9px; background: var(--text-muted); flex: none; }
+  .dot.ok { background: var(--success); }
+  .dot.warn { background: var(--warning); }
+  .dot.bad { background: var(--danger); }
+
+  .content { width: 100%; max-width: var(--content-max); margin: 0 auto; padding: var(--s7); }
+  .page-head {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s4);
+    padding: var(--s3) 0 var(--s4) var(--s4);
+    border-left: 4px solid var(--accent);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: var(--s5);
+    flex-wrap: wrap;
+  }
+  .page-head h1 {
+    font-family: var(--font-heading);
+    font-size: var(--fs-xl);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  .page-head p { color: var(--text-muted); font-size: var(--fs-sm); margin-top: var(--s1); }
+  .page-foot {
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    font-size: var(--fs-sm);
+    text-align: left;
+    margin-top: var(--s6); padding-top: var(--s4);
+    border-top: 1px solid var(--border);
+  }
+
+  /* ---------- cards ---------- */
   .card {
-    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-    padding: 16px; margin-bottom: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0;
+    padding: var(--s5);
+    margin-bottom: var(--s4);
   }
-  .card h2 { font-size: 15px; margin: 0 0 4px; }
-  .card p.hint { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
-  .login { max-width: 420px; margin: 48px auto; }
-  .login form { display: flex; gap: 8px; margin-top: 12px; }
-  .login input { flex: 1; }
-  nav#tabs {
-    display: flex; gap: 6px; overflow-x: auto; padding-bottom: 12px; margin-bottom: 4px;
-    scrollbar-width: thin;
+  .card h2 {
+    font-family: var(--font-heading);
+    font-size: var(--fs-lg);
+    font-weight: 700;
+    line-height: 1.5;
+    margin-bottom: var(--s1);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
-  nav#tabs button {
-    background: transparent; border: 1px solid var(--line); color: var(--muted);
-    padding: 8px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; font: inherit; font-size: 13px;
+  .card h3 { font-family: var(--font-heading); font-size: var(--fs-md); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+  .card h4 { font-size: var(--fs-sm); font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: var(--track-label); }
+  .hint { color: var(--text-muted); font-size: var(--fs-sm); margin-bottom: var(--s3); }
+  .card-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: var(--s3); flex-wrap: wrap; margin-bottom: var(--s3);
+    padding-bottom: var(--s3);
+    border-bottom: 1px solid var(--border);
   }
-  nav#tabs button.active { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
-  .grid { display: grid; gap: 12px; }
+  .card-head .hint { margin-bottom: 0; }
+
+  .stack { display: flex; flex-direction: column; gap: var(--s3); }
+  .row { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+  .row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); flex-wrap: wrap; }
+  .grid { display: grid; gap: var(--s3); }
   .grid.cols { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
-  .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-  .field > span { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .02em; }
-  .field small { color: var(--muted); font-size: 11px; }
-  input[type="text"], input[type="password"], input[type="number"], textarea, select {
-    width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
-    background: var(--bg); color: var(--fg); font: inherit; font-size: 14px;
+  .grid.wide { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .mt-2 { margin-top: var(--s2); }
+  .mt-3 { margin-top: var(--s3); }
+  .mt-4 { margin-top: var(--s4); }
+  .grow { flex: 1 1 auto; }
+
+  /* ---------- form controls ---------- */
+  .field { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; }
+  .field-label {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: var(--track-label);
   }
-  textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
-  textarea.code { font-family: var(--mono); font-size: 13px; }
-  input:focus-visible, textarea:focus-visible, button:focus-visible {
-    outline: 2px solid var(--accent); outline-offset: 1px;
+  .field-hint { color: var(--text-muted); font-size: var(--fs-xs); }
+  .field.inline { flex-direction: row; align-items: center; gap: var(--s3); }
+  .input {
+    width: 100%;
+    min-height: var(--control-h);
+    padding: var(--s3) var(--s4);
+    border: 1px solid var(--border-strong);
+    border-radius: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: var(--fs-md);
   }
-  button {
-    font: inherit; font-size: 14px; padding: 8px 14px; border-radius: 8px; cursor: pointer;
-    border: 1px solid var(--accent); background: var(--accent); color: var(--accent-fg); font-weight: 600;
+  textarea.input { resize: vertical; min-height: 96px; line-height: var(--lh); }
+  textarea.code { font-family: var(--font-mono); font-size: var(--fs-sm); }
+  #tab-prompt textarea.code, #tab-knowledge textarea.code { min-height: 320px; }
+  .input::placeholder { color: var(--text-muted); opacity: 0.76; }
+  .input:focus-visible, .input:focus {
+    outline: var(--focus-ring-width) solid var(--focus-ring);
+    outline-offset: 2px;
+    border-color: var(--focus-ring);
   }
-  button.secondary { background: transparent; color: var(--fg); border-color: var(--line); font-weight: 500; }
-  button.danger { background: transparent; border-color: var(--danger); color: var(--danger); font-weight: 500; }
-  button.ghost { background: transparent; border-color: transparent; color: var(--muted); font-weight: 500; }
-  button:disabled { opacity: .55; cursor: default; }
-  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .row.end { justify-content: flex-end; }
-  .check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
-  .check input { width: 16px; height: 16px; accent-color: var(--accent); }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
-  .stat { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
-  .stat b { display: block; font-size: 19px; line-height: 1.25; }
-  .stat span { color: var(--muted); font-size: 12px; }
-  .qrbox { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
-  .qrbox img { width: 190px; height: 190px; image-rendering: pixelated; background: #fff; border-radius: 10px; padding: 6px; border: 1px solid var(--line); }
-  .code { font-family: var(--mono); font-size: 22px; letter-spacing: .18em; padding: 10px 14px; border: 1px dashed var(--accent); border-radius: 8px; display: inline-block; }
-  .muted { color: var(--muted); }
-  .error { color: var(--danger); font-size: 13px; min-height: 18px; margin: 8px 0 0; }
-  .oktext { color: var(--ok); font-size: 13px; }
-  .warnbox { border: 1px solid var(--warn); color: var(--warn); padding: 8px 10px; border-radius: 8px; font-size: 13px; }
-  .charcount { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-  .charcount.over { color: var(--warn); font-weight: 700; }
-  .chat { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); margin-bottom: 10px; }
-  .bubble { max-width: 82%; padding: 8px 11px; border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
-  .bubble.user { align-self: flex-end; background: var(--accent); color: var(--accent-fg); }
-  .bubble.bot { align-self: flex-start; background: var(--panel); border: 1px solid var(--line); }
-  .meta { font-family: var(--mono); font-size: 11px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 8px; overflow-wrap: anywhere; }
-  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
-  table { border-collapse: collapse; width: 100%; font-size: 12px; min-width: 720px; }
-  th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { color: var(--muted); font-weight: 600; background: var(--bg); position: sticky; top: 0; }
-  td.msg { max-width: 260px; overflow-wrap: anywhere; }
-  .pill { font-size: 11px; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
-  .pill.ok { color: var(--ok); border-color: var(--ok); }
-  .pill.blocked, .pill.error { color: var(--danger); border-color: var(--danger); }
-  .pill.injection, .pill.ratelimit { color: var(--warn); border-color: var(--warn); }
+  .input.is-invalid { border-color: var(--danger); }
+  select.input { cursor: pointer; }
+  .field-error {
+    color: var(--danger); font-size: var(--fs-sm); min-height: 1em;
+    border-left: 3px solid var(--danger); padding-left: var(--s2);
+  }
+  .field-error:empty { display: none; }
+
+  /* switch */
+  .switch { display: inline-flex; align-items: center; gap: var(--s2); cursor: pointer; font-size: var(--fs-sm); }
+  .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .switch-track {
+    position: relative; flex: none;
+    width: 44px; height: 24px;
+    border-radius: 0;
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    transition: background 150ms ease, border-color 150ms ease;
+  }
+  .switch-track::after {
+    content: "";
+    position: absolute; top: 3px; left: 3px;
+    width: 16px; height: 16px;
+    border-radius: 0;
+    background: var(--text-muted);
+    transition: transform 150ms ease, background 150ms ease;
+  }
+  .switch input:checked + .switch-track { background: var(--accent); border-color: var(--accent); }
+  .switch input:checked + .switch-track::after { transform: translateX(20px); background: var(--accent-text); }
+  .switch input:focus-visible + .switch-track { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: 2px; }
+  .switch-label { user-select: none; }
+  .switch-row { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; margin-top: var(--s4); }
+
+  /* ---------- buttons ---------- */
+  .btn {
+    appearance: none;
+    display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
+    min-height: var(--control-h);
+    padding: var(--s3) var(--s4);
+    border: 1px solid transparent;
+    border-radius: 0;
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+    font-weight: 700;
+    letter-spacing: 1px;
+    line-height: 1;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .btn:active { transform: translateY(1px) scale(0.99); }
+  .btn:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: 2px; }
+  .btn:disabled { opacity: 0.76; cursor: not-allowed; transform: none; filter: none; }
+  .btn-primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); filter: drop-shadow(0 0 0.25rem var(--glow)); }
+  .btn-secondary { background: transparent; color: var(--text); border-color: var(--border-strong); }
+  .btn-secondary:hover { background: var(--surface-raised); filter: drop-shadow(0 0 0.25rem var(--glow)); }
+  .btn-danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+  .btn-danger:hover { background: var(--danger); color: var(--ink); filter: drop-shadow(0 0 0.25rem var(--glow)); }
+  .btn-ghost { background: transparent; color: var(--text-muted); border-color: transparent; }
+  .btn-ghost:hover { background: var(--surface-raised); color: var(--text); }
+  .btn-icon { width: var(--control-h); padding: 0; }
+  .btn-sm { min-height: 36px; padding: var(--s2) var(--s3); font-size: var(--fs-xs); letter-spacing: 0.5px; }
+  .btn.is-busy { pointer-events: none; }
+  .btn.is-busy::before {
+    content: "";
+    width: 14px; height: 14px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 0;
+    animation: spin 700ms linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- badges ---------- */
+  .badge {
+    display: inline-flex; align-items: center; gap: var(--s1);
+    padding: 2px var(--s2);
+    border: 1px solid var(--border-strong);
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .badge-success { border-color: var(--success); color: var(--success); }
+  .badge-danger { border-color: var(--danger); color: var(--danger); }
+  .badge-warning { border-color: var(--warning); color: var(--warning); }
+  .badge-info { border-color: var(--info); color: var(--info); }
+
+  /* ---------- login ---------- */
+  .login-view { min-height: 100vh; display: grid; place-items: center; padding: var(--s4); }
+  .login-card { width: 100%; max-width: 460px; margin: 0; border-top: 4px solid var(--accent); padding: var(--s6); }
+  .login-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin-bottom: var(--s5); }
+  .login-form { display: flex; gap: var(--s2); margin-top: var(--s3); }
+  .login-form .input { flex: 1; }
+
+  /* ---------- dashboard ---------- */
+  .qrbox { display: flex; gap: var(--s5); align-items: flex-start; flex-wrap: wrap; }
+  .qr-side { flex: none; }
+  .qr { width: 190px; height: 190px; image-rendering: pixelated; background: var(--qr-bg); border-radius: 0; padding: var(--s1); border: 1px solid var(--border-strong); }
+  .qr-side .hint { margin-top: var(--s2); max-width: 210px; }
+  .qr-main { flex: 1; min-width: 240px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s3); }
+  .stat { border: 1px solid var(--border); border-radius: 0; padding: var(--s3); background: var(--surface-raised); }
+  .stat b { display: block; font-family: var(--font-mono); font-size: var(--fs-xl); line-height: 1.25; overflow-wrap: anywhere; }
+  #statModel { font-size: var(--fs-md); padding-top: var(--s2); }
+  .stat span { color: var(--text-muted); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 1px; }
+  .meta {
+    font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-muted);
+    border-top: 1px solid var(--border); padding-top: var(--s3); margin-top: var(--s4);
+    overflow-wrap: anywhere;
+  }
+  .pair-code {
+    font-family: var(--font-mono); font-size: var(--fs-xl); letter-spacing: 0.18em;
+    padding: var(--s2) var(--s3); border: 1px dashed var(--accent); border-radius: 0;
+    display: inline-block; margin-top: var(--s2);
+  }
+  .charcount { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-muted); }
+  .charcount.over { color: var(--danger); font-weight: 700; }
+
+  /* ---------- providers ---------- */
+  .provider-list { display: flex; flex-direction: column; gap: var(--s4); }
+  .provider-card { border: 1px solid var(--border); border-radius: 0; padding: var(--s4); background: var(--bg); }
+  .provider-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s3); flex-wrap: wrap; }
+  .provider-title { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+  .provider-base { color: var(--text-muted); font-size: var(--fs-sm); margin-top: var(--s1); overflow-wrap: anywhere; }
+  .provider-keys-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); flex-wrap: wrap; margin: var(--s4) 0 var(--s2); padding-top: var(--s3); border-top: 1px solid var(--border); }
+  .key-list { display: flex; flex-direction: column; gap: var(--s2); }
+  .key-row {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--s2);
+    flex-wrap: wrap;
+    border: 1px solid var(--border);
+    border-radius: 0;
+    padding: var(--s2) var(--s3);
+    background: var(--surface);
+  }
+  .key-meta { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; min-width: 0; }
+  .key-mask { color: var(--text-muted); }
+
+  /* ---------- tables ---------- */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 0; }
+  .table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+  .table th {
+    text-align: left;
+    padding: var(--s3);
+    border-bottom: 1px solid var(--border-strong);
+    background: var(--surface-raised);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: var(--track-label);
+    white-space: nowrap;
+  }
+  .table td {
+    padding: var(--s2) var(--s3);
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+  }
+  .table tbody tr:last-child td { border-bottom: 0; }
+  .table tbody tr:hover { background: var(--surface-raised); }
+  .cell-msg { max-width: 280px; overflow-wrap: anywhere; }
+
+  /* ---------- chat (uji coba) ---------- */
+  .chat {
+    display: flex; flex-direction: column; gap: var(--s2);
+    max-height: 420px; overflow-y: auto;
+    padding: var(--s3);
+    border: 1px solid var(--border);
+    border-radius: 0;
+    background: var(--bg);
+    margin-bottom: var(--s3);
+  }
+  .bubble {
+    max-width: 82%;
+    padding: var(--s2) var(--s3);
+    border-radius: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: var(--fs-sm);
+    border: 1px solid transparent;
+  }
+  .bubble.user { align-self: flex-end; background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .bubble.bot { align-self: flex-start; background: var(--surface-raised); border-color: var(--border); }
+
+  /* ---------- toast ---------- */
+  .toast-stack {
+    position: fixed; right: var(--s4); bottom: var(--s4);
+    display: flex; flex-direction: column; gap: var(--s2);
+    z-index: 100;
+    max-width: min(360px, calc(100vw - var(--s5) * 2));
+  }
   .toast {
-    position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
-    background: var(--fg); color: var(--bg); padding: 9px 14px; border-radius: 8px;
-    font-size: 13px; z-index: 50; max-width: 90vw; opacity: 0; pointer-events: none; transition: opacity .18s;
+    display: flex; align-items: flex-start; gap: var(--s2);
+    padding: var(--s3) var(--s4);
+    background: var(--surface-raised);
+    border: 1px solid var(--border-strong);
+    border-left: 4px solid var(--success);
+    border-radius: 0;
+    box-shadow: none;
+    font-size: var(--fs-sm);
+    animation: toast-in 150ms ease-out;
   }
-  .toast.show { opacity: 1; }
-  .toast.bad { background: var(--danger); color: #fff; }
+  .toast.error { border-left-color: var(--danger); }
+  .toast.info { border-left-color: var(--info); }
+  .toast-icon { font-weight: 700; color: var(--success); flex: none; }
+  .toast.error .toast-icon { color: var(--danger); }
+  .toast.info .toast-icon { color: var(--info); }
+  .toast-text { overflow-wrap: anywhere; }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* ---------- modal ---------- */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: var(--overlay);
+    display: flex; align-items: center; justify-content: center;
+    padding: var(--s4);
+    z-index: 90;
+  }
+  .modal {
+    width: 100%; max-width: 560px;
+    max-height: calc(100vh - var(--s5) * 2);
+    display: flex; flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 0;
+    box-shadow: none;
+    animation: modal-in 150ms ease-out;
+  }
+  @keyframes modal-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .modal-head {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+    padding: var(--s4);
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-title {
+    font-family: var(--font-heading);
+    font-size: var(--fs-lg);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .modal-body { padding: var(--s4); overflow-y: auto; }
+  .modal-text { font-size: var(--fs-sm); color: var(--text-muted); }
+  .modal-foot {
+    display: flex; justify-content: flex-end; gap: var(--s2);
+    padding: var(--s4);
+    border-top: 1px solid var(--border);
+  }
+  .key-box {
+    display: flex; align-items: center; gap: var(--s2);
+    padding: var(--s3);
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: 0;
+  }
+  .key-value { flex: 1; font-family: var(--font-mono); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+  .key-countdown { color: var(--text-muted); font-size: var(--fs-xs); }
+
+  /* ---------- empty / skeleton ---------- */
+  .empty {
+    border: 1px dashed var(--border-strong);
+    border-radius: 0;
+    padding: var(--s5);
+    text-align: center;
+    color: var(--text-muted);
+    display: flex; flex-direction: column; align-items: center; gap: var(--s3);
+  }
+  .skeleton { display: flex; flex-direction: column; gap: var(--s2); }
+  .skeleton-line {
+    height: var(--s5);
+    border-radius: 0;
+    background: var(--surface-raised);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 768px) {
+    .app { display: block; }
+    .sidebar {
+      position: sticky; top: 0; height: auto;
+      border-right: 0; border-bottom: 1px solid var(--border);
+      padding: var(--s3) var(--s4) 0;
+      gap: var(--s2);
+      overflow: visible;
+    }
+    .sidebar .brand { display: flex; padding-bottom: var(--s2); }
+    .brand-mark { width: var(--s6); height: var(--s6); font-size: var(--fs-lg); }
+    .brand-text strong { font-size: var(--fs-md); }
+    .brand-text small { display: none; }
+    .tabs {
+      flex-direction: row;
+      overflow-x: auto;
+      gap: 0;
+      padding-bottom: var(--s2);
+      border-top: 0;
+      scrollbar-width: none;
+    }
+    .tabs::-webkit-scrollbar { display: none; height: 0; }
+    .tab-btn {
+      width: auto; flex: 0 0 auto; white-space: nowrap;
+      min-height: 44px;
+      border-left: 0;
+      border-bottom: 3px solid transparent;
+    }
+    .tab-btn.active { border-left-color: transparent; border-bottom-color: var(--ink); }
+    .sidebar-foot {
+      margin-top: 0;
+      flex-direction: row; align-items: center; justify-content: space-between;
+      border-top: 1px solid var(--border);
+      padding: var(--s2) 0;
+      gap: var(--s2);
+    }
+    .wa-status { border-top: 0; padding-top: 0; flex: 1 1 auto; min-width: 0; font-size: var(--fs-xs); letter-spacing: 0.5px; }
+    .sidebar-foot > .row { flex: 0 0 auto; }
+    .sidebar-foot .btn-sm { padding: var(--s1) var(--s2); }
+    .content { padding: var(--s4); }
+    .card { padding: var(--s4); }
+    .page-head { margin-bottom: var(--s4); padding-left: var(--s3); }
+    .page-head h1 { font-size: var(--fs-lg); }
+    .btn { min-height: 44px; }
+
+    .table-wrap { border: 0; overflow: visible; }
+    .table thead { display: none; }
+    .table, .table tbody, .table tr, .table td { display: block; width: 100%; }
+    .table tr {
+      border: 1px solid var(--border);
+      border-radius: 0;
+      margin-bottom: var(--s2);
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .table td {
+      display: grid;
+      grid-template-columns: 104px minmax(0, 1fr);
+      gap: var(--s2);
+      border-bottom: 1px solid var(--border);
+      padding: var(--s2) var(--s3);
+    }
+    .table td:last-child { border-bottom: 0; }
+    .table td::before {
+      content: attr(data-label);
+      color: var(--text-muted);
+      font-size: var(--fs-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding-top: 1px;
+    }
+    .cell-msg { max-width: none; }
+    .modal-foot { flex-wrap: wrap; }
+    .modal-foot .btn { flex: 1; }
+  }
+
   @media (max-width: 560px) {
-    main { padding: 12px 10px 56px; }
-    .card { padding: 13px; }
-    .login form { flex-direction: column; }
-    .bubble { max-width: 92%; }
+    .login-form { flex-direction: column; }
+    .qrbox { gap: var(--s3); }
+    .qr-side { width: 100%; }
+    .qr { width: 100%; max-width: 260px; height: auto; aspect-ratio: 1; }
+    .toast-stack { left: var(--s3); right: var(--s3); max-width: none; }
+    .content { padding: var(--s3); }
+    .login-card { padding: var(--s4); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+
+  /* ---------- Neon Terminal visual layer ---------- */
+  :root {
+    --bg: #161a1d;
+    --surface: #211c36;
+    --surface-raised: #291c33;
+    --border: rgba(255, 255, 255, 0.22);
+    --border-strong: rgba(255, 255, 255, 0.72);
+    --text: #ffffff;
+    --text-muted: rgba(255, 255, 255, 0.72);
+    --accent: #e5383b;
+    --accent-hover: #bd2326;
+    --accent-text: #ffffff;
+    --focus-ring: #fae1dd;
+    --overlay: rgba(22, 26, 29, 0.86);
+    --glow: #ffffff;
+    --qr-bg: #ffffff;
+    --gradient: linear-gradient(135deg, #c83338, #291c33);
+    --grad-card: linear-gradient(135deg, #c83338, #291c33);
+    --grad-profile: linear-gradient(135deg, #e5383b, #211c36);
+    --glow-heading: 0 0 8px rgba(255, 255, 255, 0.76);
+    --glow-body: 0 0 4px rgba(255, 255, 255, 0.34);
+    --glow-accent: 0 0 4px rgba(229, 56, 59, 0.8);
+    --success: #ffffff;
+    --warning: #fae1dd;
+    --danger: #e5383b;
+    --info: rgba(255, 255, 255, 0.8);
+    --radius-sm: 8px;
+    --radius: 12px;
+    --radius-lg: 16px;
+    --shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+    --shadow-accent: 0 10px 24px rgba(200, 51, 56, 0.28);
+    --font-display: "Arial Narrow", "Agency FB", Arial, sans-serif;
+    --font-heading: "PT Sans", "Segoe UI", Arial, sans-serif;
+    --font-mono: "Cascadia Code", "Hack", Consolas, "Courier New", monospace;
+    --font-ui: "Cascadia Code", "Hack", ui-monospace, monospace;
+  }
+
+  :root[data-theme="light"] {
+    --bg: #f5f3f4;
+    --surface: #ffffff;
+    --surface-raised: #eee8ec;
+    --border: rgba(33, 28, 54, 0.18);
+    --border-strong: rgba(33, 28, 54, 0.55);
+    --text: #211c36;
+    --text-muted: rgba(33, 28, 54, 0.72);
+    --focus-ring: #bd2326;
+    --overlay: rgba(33, 28, 54, 0.7);
+    --glow: #211c36;
+    --success: #211c36;
+    --warning: #bd2326;
+    --info: #211c36;
+  }
+
+  html {
+    background: var(--bg);
+    scrollbar-color: var(--accent) var(--bg);
+  }
+  body {
+    background:
+      radial-gradient(circle at 90% 0, rgba(229, 56, 59, 0.1), transparent 28rem),
+      var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  h1, h2, h3, h4 { text-shadow: var(--glow-heading); }
+  p, label, .field-hint, .hint { text-shadow: var(--glow-body); }
+  a { text-shadow: var(--glow-accent); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 20px; }
+  ::-webkit-scrollbar-thumb:hover { background: #b30000; }
+
+  .app { background: transparent; }
+  .sidebar {
+    background: linear-gradient(180deg, rgba(41, 28, 51, 0.96), rgba(22, 26, 29, 0.98));
+    border-right-color: var(--border);
+    box-shadow: 12px 0 32px rgba(0, 0, 0, 0.14);
+  }
+  :root[data-theme="light"] .sidebar {
+    background: linear-gradient(180deg, #ffffff, #eee8ec);
+  }
+  .brand-mark {
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: var(--grad-profile);
+    filter: drop-shadow(0 0 8px rgba(229, 56, 59, 0.46));
+  }
+  .brand-text strong { text-shadow: var(--glow-heading); }
+  .tabs { border-top-color: var(--border); }
+  .tab-btn {
+    border-bottom-color: var(--border);
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+  .tab-btn:hover { text-shadow: var(--glow-heading); }
+  .tab-btn.active {
+    background: var(--grad-card);
+    border-left-color: var(--accent);
+    box-shadow: inset 0 0 20px rgba(229, 56, 59, 0.16);
+  }
+  .content { max-width: 1440px; }
+  .page-head {
+    border-left-color: var(--accent);
+    border-bottom-color: var(--border);
+  }
+  .page-head h1 { font-size: clamp(var(--fs-xl), 3vw, 42px); }
+  .page-head p { text-transform: uppercase; }
+  .card {
+    background: linear-gradient(145deg, rgba(41, 28, 51, 0.94), rgba(22, 26, 29, 0.96));
+    border: 1px solid var(--border);
+    border-top: 2px solid rgba(229, 56, 59, 0.74);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    transition: transform 150ms ease, box-shadow 150ms ease;
+  }
+  :root[data-theme="light"] .card {
+    background: var(--surface);
+  }
+  .card:hover { box-shadow: var(--shadow-accent); }
+  .card h2 { font-size: clamp(var(--fs-lg), 2vw, 28px); }
+  .card-head { border-bottom-color: var(--border); }
+  .input {
+    background: rgba(0, 0, 0, 0.25);
+    border-color: var(--border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--accent);
+    text-shadow: var(--glow-accent);
+  }
+  :root[data-theme="light"] .input { background: rgba(33, 28, 54, 0.05); }
+  .input::placeholder { color: var(--accent); text-shadow: var(--glow-accent); }
+  .input:focus-visible, .input:focus {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 2px rgba(229, 56, 59, 0.3);
+  }
+  .btn {
+    border-radius: var(--radius-sm);
+    transition: transform 150ms ease, background 150ms ease, color 150ms ease, box-shadow 150ms ease;
+  }
+  .btn:hover { transform: translateY(-2px); }
+  .btn-primary {
+    background: var(--grad-profile);
+    border-color: var(--accent);
+    box-shadow: 0 4px 14px rgba(229, 56, 59, 0.22);
+  }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { border-color: var(--border-strong); }
+  .btn-danger { border-radius: var(--radius-sm); }
+  .btn-ghost:hover { background: rgba(229, 56, 59, 0.12); }
+  .badge, .key-box, .chat { border-radius: var(--radius-sm); }
+  .badge { text-shadow: var(--glow-body); }
+  .switch-track, .switch-track::after { border-radius: 999px; }
+  .switch-track { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+  .stat {
+    border-radius: var(--radius-sm);
+    background: rgba(0, 0, 0, 0.16);
+    border-color: var(--border);
+  }
+  :root[data-theme="light"] .stat { background: rgba(33, 28, 54, 0.05); }
+  .table-wrap { border-radius: var(--radius-sm); }
+  .table tr, .table td { border-color: var(--border); }
+  .bubble { border-radius: var(--radius-sm); }
+  .bubble.user { background: var(--grad-profile); }
+  .toast {
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow);
+  }
+  .modal {
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border-top: 3px solid var(--accent);
+  }
+  .empty { border-radius: var(--radius); }
+  .skeleton-line { border-radius: var(--radius-sm); }
+  .qr { border-radius: var(--radius-sm); box-shadow: 0 0 20px rgba(255, 255, 255, 0.2); }
+
+  @media (max-width: 900px) {
+    .app { display: block; }
+    .sidebar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      height: auto;
+      border-right: 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .content { max-width: none; }
+  }
+  @media (max-width: 768px) {
+    .sidebar { padding-inline: var(--s3); }
+    .tabs { margin-inline: calc(var(--s3) * -1); padding-inline: var(--s3); }
+    .tab-btn { border-radius: var(--radius-sm); }
+    .card { border-radius: var(--radius-sm); }
+    .table tr { border-radius: var(--radius-sm); }
+    .page-head h1 { font-size: var(--fs-xl); }
   }
 </style>
 </head>
 <body>
-<header>
-  <div class="brand">
-    <span class="dot" id="waDot" aria-hidden="true"></span>
-    <h1>Kaliber Bot</h1>
-  </div>
-  <div class="header-actions">
-    <span class="badge" id="waBadge">belum masuk</span>
-    <button class="ghost hidden" id="tokenBtn" type="button">Ganti token</button>
-  </div>
-</header>
 
-<main>
-  <section class="card login" id="login">
+<div id="loginView" class="login-view">
+  <section class="card login-card">
+    <div class="login-head">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">K</span>
+        <div class="brand-text">
+          <strong>Kaliber Bot</strong>
+          <small>Admin LSO Kaliber</small>
+        </div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm js-theme" aria-label="Ganti tema">Tema</button>
+    </div>
     <h2>Masuk admin</h2>
     <p class="hint">Tempel <code>ADMIN_TOKEN</code>. Token disimpan di <code>sessionStorage</code> tab ini saja.</p>
-    <form id="loginForm">
-      <input id="tokenInput" type="password" autocomplete="current-password" placeholder="ADMIN_TOKEN" required aria-label="ADMIN_TOKEN">
-      <button type="submit">Masuk</button>
+    <form id="loginForm" class="login-form">
+      <label class="sr-only" for="tokenInput">ADMIN_TOKEN</label>
+      <input id="tokenInput" class="input" type="password" autocomplete="current-password" placeholder="ADMIN_TOKEN" required>
+      <button type="submit" class="btn btn-primary">Masuk</button>
     </form>
-    <p class="error" id="loginError" role="alert"></p>
+    <p class="field-error" id="loginError" role="alert"></p>
   </section>
+</div>
 
-  <section id="app" class="hidden">
-    <nav id="tabs" aria-label="Bagian admin">
-      <button type="button" data-tab="dashboard" class="active">Dashboard</button>
-      <button type="button" data-tab="prompt">Prompt</button>
-      <button type="button" data-tab="knowledge">Knowledge</button>
-      <button type="button" data-tab="model">Model</button>
-      <button type="button" data-tab="guard">Guard</button>
-      <button type="button" data-tab="test">Uji Coba</button>
-      <button type="button" data-tab="log">Log</button>
+<div id="appView" class="app hidden">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">K</span>
+      <div class="brand-text">
+        <strong>Kaliber Bot</strong>
+        <small>Admin LSO Kaliber</small>
+      </div>
+    </div>
+
+    <nav id="tabs" class="tabs" role="tablist" aria-label="Bagian admin">
+      <button type="button" class="tab-btn active" data-tab="dashboard" role="tab" aria-selected="true">Dashboard</button>
+      <button type="button" class="tab-btn" data-tab="prompt" role="tab" aria-selected="false">Prompt</button>
+      <button type="button" class="tab-btn" data-tab="knowledge" role="tab" aria-selected="false">Knowledge</button>
+      <button type="button" class="tab-btn" data-tab="model" role="tab" aria-selected="false">Model</button>
+      <button type="button" class="tab-btn" data-tab="provider" role="tab" aria-selected="false">Provider</button>
+      <button type="button" class="tab-btn" data-tab="guard" role="tab" aria-selected="false">Guard</button>
+      <button type="button" class="tab-btn" data-tab="test" role="tab" aria-selected="false">Uji Coba</button>
+      <button type="button" class="tab-btn" data-tab="log" role="tab" aria-selected="false">Log</button>
     </nav>
 
-    <div class="tab" id="tab-dashboard">
+    <div class="sidebar-foot">
+      <div class="wa-status">
+        <span class="dot" id="waDot" aria-hidden="true"></span>
+        <span id="waText">Belum terhubung</span>
+      </div>
+      <div class="row">
+        <button type="button" class="btn btn-ghost btn-sm js-theme" aria-label="Ganti tema">Tema</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="tokenBtn">Ganti token</button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="content">
+    <div class="page-head">
+      <div>
+        <h1 id="pageTitle">Dashboard</h1>
+        <p id="pageSub">Status WhatsApp, runtime, dan level log.</p>
+      </div>
+      <span class="badge" id="waBadge">Belum terhubung</span>
+    </div>
+
+    <!-- ============ DASHBOARD ============ -->
+    <section class="tab-panel" id="tab-dashboard" role="tabpanel">
       <div class="card">
         <h2>WhatsApp</h2>
         <p class="hint">Scan QR di WhatsApp &gt; Perangkat tertaut, atau minta pairing code lewat nomor.</p>
         <div class="qrbox">
-          <div>
-            <img id="qrImage" class="hidden" alt="QR login WhatsApp">
-            <p class="muted" id="qrHint">QR muncul saat bot sedang menghubungkan.</p>
+          <div class="qr-side">
+            <img id="qrImage" class="qr hidden" alt="QR login WhatsApp">
+            <p class="muted small" id="qrHint">QR muncul saat bot sedang menghubungkan.</p>
           </div>
-          <div class="grid" style="flex:1; min-width:220px;">
+          <div class="qr-main stack">
             <div class="field">
-              <span>Pairing code</span>
+              <span class="field-label">Pairing code</span>
               <div class="row">
-                <input id="pairPhone" type="text" inputmode="tel" placeholder="628xxxxxxxxxx" aria-label="Nomor WhatsApp">
-                <button type="button" class="secondary" id="pairBtn">Minta kode</button>
+                <input id="pairPhone" class="input" type="text" inputmode="tel" placeholder="628xxxxxxxxxx" aria-label="Nomor WhatsApp">
+                <button type="button" class="btn btn-secondary" id="pairBtn">Minta kode</button>
               </div>
-              <small>Nomor internasional tanpa tanda +. Contoh: 6281234567890.</small>
+              <small class="field-hint">Nomor internasional tanpa tanda +. Contoh: 6281234567890.</small>
               <div id="pairResult"></div>
             </div>
-            <div class="row">
-              <button type="button" class="danger" id="logoutBtn">Logout WhatsApp</button>
+            <div>
+              <button type="button" class="btn btn-danger" id="logoutBtn">Logout WhatsApp</button>
             </div>
           </div>
         </div>
@@ -218,134 +996,191 @@
           <div class="stat"><b id="statBlocked">-</b><span>Ditahan hari ini</span></div>
           <div class="stat"><b id="statStrikes">-</b><span>Strike aktif</span></div>
           <div class="stat"><b id="statMutes">-</b><span>Nomor dimute</span></div>
-          <div class="stat"><b id="statModel" style="font-size:13px; overflow-wrap:anywhere;">-</b><span>Model</span></div>
+          <div class="stat"><b id="statModel">-</b><span>Model</span></div>
         </div>
         <p class="meta" id="routerInfo"></p>
-        <div class="row" style="margin-top:10px;">
-          <button type="button" id="toggleBot">Nyalakan / matikan bot</button>
-          <span class="muted" id="botStateText"></span>
+        <div class="switch-row">
+          <label class="switch">
+            <input type="checkbox" id="botSwitch">
+            <span class="switch-track" aria-hidden="true"></span>
+            <span class="switch-label">Bot menerima pesan</span>
+          </label>
         </div>
       </div>
-    </div>
 
-    <div class="tab hidden" id="tab-prompt">
+      <div class="card" id="logLevelCard">
+        <h2>Level log server</h2>
+        <p class="hint">Berlaku langsung tanpa restart. <code>LOG_LEVEL</code> di env hanya nilai awal saat pertama kali dijalankan.</p>
+        <div class="row">
+          <label class="field">
+            <span class="field-label">Level</span>
+            <select class="input" id="logLevelSelect" data-key="log_level" data-type="str">
+              <option value="trace">trace</option>
+              <option value="debug">debug</option>
+              <option value="info">info</option>
+              <option value="warn">warn</option>
+              <option value="error">error</option>
+              <option value="fatal">fatal</option>
+            </select>
+          </label>
+          <button type="button" class="btn btn-primary" data-save="#logLevelCard">Simpan</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PROMPT ============ -->
+    <section class="tab-panel hidden" id="tab-prompt" role="tabpanel">
       <div class="card">
         <h2>System prompt</h2>
         <p class="hint">Placeholder: <code>{{KNOWLEDGE}}</code>, <code>{{NOW}}</code>, <code>{{CONTACT}}</code>. Teks pengguna tidak pernah masuk ke sini.</p>
         <div class="field">
-          <span>Template</span>
-          <textarea class="code" data-key="system_prompt" data-type="str" rows="16" spellcheck="false"></textarea>
+          <span class="field-label">Template</span>
+          <textarea class="input code" data-key="system_prompt" data-type="str" rows="16" spellcheck="false"></textarea>
         </div>
-        <div class="grid cols" style="margin-top:12px;">
-          <label class="field"><span>Kontak pengurus</span><input type="text" data-key="contact" data-type="str"></label>
-          <label class="field"><span>Teks fallback (LLM gagal)</span><input type="text" data-key="fallback_text" data-type="str"></label>
-          <label class="field"><span>Teks penolakan (injeksi)</span><input type="text" data-key="refusal_text" data-type="str"></label>
-          <label class="field"><span>Teks <code>!info</code></span><textarea data-key="info_text" data-type="str" rows="3"></textarea></label>
-          <label class="field"><span>Teks <code>!help</code></span><textarea data-key="help_text" data-type="str" rows="3"></textarea></label>
+        <div class="grid cols mt-3">
+          <label class="field"><span class="field-label">Kontak pengurus</span><input class="input" type="text" data-key="contact" data-type="str"></label>
+          <label class="field"><span class="field-label">Teks fallback (LLM gagal)</span><input class="input" type="text" data-key="fallback_text" data-type="str"></label>
+          <label class="field"><span class="field-label">Teks penolakan (injeksi)</span><input class="input" type="text" data-key="refusal_text" data-type="str"></label>
+          <label class="field"><span class="field-label">Teks <code>!info</code></span><textarea class="input" data-key="info_text" data-type="str" rows="3"></textarea></label>
+          <label class="field"><span class="field-label">Teks <code>!help</code></span><textarea class="input" data-key="help_text" data-type="str" rows="3"></textarea></label>
         </div>
-        <div class="row end" style="margin-top:12px;">
-          <button type="button" class="secondary" data-reset="#tab-prompt">Reset ke default</button>
-          <button type="button" data-save="#tab-prompt">Simpan prompt</button>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-secondary" data-reset="#tab-prompt">Reset ke default</button>
+          <button type="button" class="btn btn-primary" data-save="#tab-prompt">Simpan prompt</button>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="tab hidden" id="tab-knowledge">
+    <!-- ============ KNOWLEDGE ============ -->
+    <section class="tab-panel hidden" id="tab-knowledge" role="tabpanel">
       <div class="card">
         <h2>Knowledge base</h2>
         <p class="hint">Hanya admin yang bisa mengisi. Tidak ada scraping/import dari luar. Bot menjawab hanya dari teks ini.</p>
-        <textarea class="code" data-key="knowledge" data-type="str" rows="22" spellcheck="false"></textarea>
-        <div class="row" style="margin-top:8px; justify-content:space-between;">
+        <textarea class="input code" data-key="knowledge" data-type="str" rows="22" spellcheck="false"></textarea>
+        <div class="row-between mt-2">
           <span class="charcount" id="knowledgeCount">0 karakter</span>
           <span class="charcount" id="knowledgeWarn"></span>
         </div>
-        <div class="row end" style="margin-top:12px;">
-          <button type="button" data-save="#tab-knowledge">Simpan knowledge</button>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-primary" data-save="#tab-knowledge">Simpan knowledge</button>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="tab hidden" id="tab-model">
+    <!-- ============ MODEL ============ -->
+    <section class="tab-panel hidden" id="tab-model" role="tabpanel">
       <div class="card">
         <h2>Model &amp; LLM</h2>
-        <p class="hint">Model utama dan daftar fallback dipanggil berurutan. URL dan API key 9router hanya dari env server.</p>
+        <p class="hint">Daftar model diambil dari provider aktif. Format <code>namaProvider/namaModel</code> dipakai otomatis bila ada lebih dari satu provider.</p>
         <div class="grid cols">
-          <label class="field"><span>Model utama</span><input type="text" data-key="model" data-type="str" placeholder="nama-model-atau-combo"></label>
-          <label class="field"><span>Temperature</span><input type="number" data-key="temperature" data-type="num" min="0" max="2" step="0.1"></label>
-          <label class="field"><span>Max tokens</span><input type="number" data-key="max_tokens" data-type="num" min="1" max="2000" step="1"></label>
-          <label class="field"><span>Giliran riwayat</span><input type="number" data-key="history_turns" data-type="num" min="0" max="20" step="1"></label>
+          <label class="field">
+            <span class="field-label">Model utama</span>
+            <input class="input" id="modelInput" list="modelOptions" type="text" data-key="model" data-type="str" placeholder="pilih atau ketik model">
+            <datalist id="modelOptions"></datalist>
+            <small class="field-hint" id="modelHint">Klik “Muat model dari provider” untuk melihat pilihan.</small>
+          </label>
+          <label class="field"><span class="field-label">Temperature</span><input class="input" type="number" data-key="temperature" data-type="num" min="0" max="2" step="0.1"></label>
+          <label class="field"><span class="field-label">Max tokens</span><input class="input" type="number" data-key="max_tokens" data-type="num" min="1" max="2000" step="1"></label>
+          <label class="field"><span class="field-label">Giliran riwayat</span><input class="input" type="number" data-key="history_turns" data-type="num" min="0" max="20" step="1"></label>
         </div>
-        <div class="field" style="margin-top:12px;">
-          <span>Model fallback (satu per baris, urutan prioritas)</span>
-          <textarea class="code" data-key="fallback_models" data-type="list" rows="5" spellcheck="false"></textarea>
+        <div class="row mt-2">
+          <button type="button" class="btn btn-secondary btn-sm" id="loadModelsBtn">Muat model dari provider</button>
+          <span class="muted small" id="modelStatus"></span>
         </div>
-        <div class="row" style="margin-top:12px;">
-          <button type="button" class="secondary" id="pingBtn">Tes koneksi ke 9router</button>
-          <span class="muted" id="pingResult"></span>
+        <div class="field mt-3">
+          <span class="field-label">Model fallback (satu per baris, urutan prioritas)</span>
+          <textarea class="input code" data-key="fallback_models" data-type="list" rows="5" spellcheck="false"></textarea>
         </div>
-        <div class="row end">
-          <button type="button" data-save="#tab-model">Simpan model</button>
+        <div class="row mt-3">
+          <button type="button" class="btn btn-secondary" id="pingBtn">Tes koneksi LLM</button>
+          <span class="muted small" id="pingResult"></span>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-primary" data-save="#tab-model">Simpan model</button>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="tab hidden" id="tab-guard">
+    <!-- ============ PROVIDER ============ -->
+    <section class="tab-panel hidden" id="tab-provider" role="tabpanel">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Provider &amp; API key</h2>
+            <p class="hint">Setiap provider bisa punya beberapa key (round-robin). Key disimpan terenkripsi dan hanya tampil sebagai mask. Password reveal diatur lewat <code>REVEAL_PASSWORD</code> di <code>.env</code> server, bukan dari web.</p>
+          </div>
+          <div class="row">
+            <button type="button" class="btn btn-secondary" id="refreshProviders">Muat ulang</button>
+            <button type="button" class="btn btn-primary" id="addProviderBtn">+ Tambah provider</button>
+          </div>
+        </div>
+        <div id="providersList" class="provider-list"></div>
+      </div>
+    </section>
+
+    <!-- ============ GUARD ============ -->
+    <section class="tab-panel hidden" id="tab-guard" role="tabpanel">
       <div class="card">
         <h2>Saklar &amp; batas</h2>
         <p class="hint">Berlaku langsung tanpa restart.</p>
         <div class="grid cols">
-          <label class="check"><input type="checkbox" data-key="private_enabled" data-type="bool"> Chat pribadi</label>
-          <label class="check"><input type="checkbox" data-key="group_enabled" data-type="bool"> Grup</label>
-          <label class="check"><input type="checkbox" data-key="allowlist_enabled" data-type="bool"> Mode allowlist</label>
+          <label class="switch"><input type="checkbox" data-key="private_enabled" data-type="bool"><span class="switch-track" aria-hidden="true"></span><span class="switch-label">Chat pribadi</span></label>
+          <label class="switch"><input type="checkbox" data-key="group_enabled" data-type="bool"><span class="switch-track" aria-hidden="true"></span><span class="switch-label">Grup</span></label>
+          <label class="switch"><input type="checkbox" data-key="allowlist_enabled" data-type="bool"><span class="switch-track" aria-hidden="true"></span><span class="switch-label">Mode allowlist</span></label>
         </div>
-        <div class="grid cols" style="margin-top:12px;">
-          <label class="field"><span>Prefix trigger grup</span><input type="text" data-key="trigger_prefix" data-type="str" placeholder="!kaliber"></label>
-          <label class="field"><span>Maksimal karakter input</span><input type="number" data-key="max_input_chars" data-type="num" min="20" max="5000" step="1"></label>
-          <label class="field"><span>Rate limit / menit / nomor</span><input type="number" data-key="rate_limit_per_min" data-type="num" min="1" max="120" step="1"></label>
-          <label class="field"><span>Cooldown grup (detik)</span><input type="number" data-key="group_cooldown_sec" data-type="num" min="0" max="3600" step="1"></label>
-          <label class="field"><span>Strike sebelum mute</span><input type="number" data-key="strike_limit" data-type="num" min="1" max="20" step="1"></label>
-          <label class="field"><span>Jendela strike (menit)</span><input type="number" data-key="strike_window_min" data-type="num" min="1" max="1440" step="1"></label>
-          <label class="field"><span>Durasi mute (menit)</span><input type="number" data-key="mute_minutes" data-type="num" min="1" max="10080" step="1"></label>
+        <div class="grid cols mt-4">
+          <label class="field"><span class="field-label">Prefix trigger grup</span><input class="input" type="text" data-key="trigger_prefix" data-type="str" placeholder="!kaliber"></label>
+          <label class="field"><span class="field-label">Maksimal karakter input</span><input class="input" type="number" data-key="max_input_chars" data-type="num" min="20" max="5000" step="1"></label>
+          <label class="field"><span class="field-label">Rate limit / menit / nomor</span><input class="input" type="number" data-key="rate_limit_per_min" data-type="num" min="1" max="120" step="1"></label>
+          <label class="field"><span class="field-label">Cooldown grup (detik)</span><input class="input" type="number" data-key="group_cooldown_sec" data-type="num" min="0" max="3600" step="1"></label>
+          <label class="field"><span class="field-label">Strike sebelum mute</span><input class="input" type="number" data-key="strike_limit" data-type="num" min="1" max="20" step="1"></label>
+          <label class="field"><span class="field-label">Jendela strike (menit)</span><input class="input" type="number" data-key="strike_window_min" data-type="num" min="1" max="1440" step="1"></label>
+          <label class="field"><span class="field-label">Durasi mute (menit)</span><input class="input" type="number" data-key="mute_minutes" data-type="num" min="1" max="10080" step="1"></label>
         </div>
-        <div class="grid cols" style="margin-top:12px;">
-          <label class="field"><span>Grup diizinkan (satu per baris, JID)</span><textarea class="code" data-key="allowed_groups" data-type="list" rows="4" spellcheck="false"></textarea></label>
-          <label class="field"><span>Blocklist nomor (satu per baris)</span><textarea class="code" data-key="blocklist" data-type="list" rows="4" spellcheck="false"></textarea></label>
-          <label class="field"><span>Allowlist nomor (satu per baris)</span><textarea class="code" data-key="allowlist" data-type="list" rows="4" spellcheck="false"></textarea></label>
+        <div class="grid cols mt-3">
+          <label class="field"><span class="field-label">Grup diizinkan (satu per baris, JID)</span><textarea class="input code" data-key="allowed_groups" data-type="list" rows="4" spellcheck="false"></textarea></label>
+          <label class="field"><span class="field-label">Blocklist nomor (satu per baris)</span><textarea class="input code" data-key="blocklist" data-type="list" rows="4" spellcheck="false"></textarea></label>
+          <label class="field"><span class="field-label">Allowlist nomor (satu per baris)</span><textarea class="input code" data-key="allowlist" data-type="list" rows="4" spellcheck="false"></textarea></label>
         </div>
       </div>
       <div class="card">
         <h2>Pola injeksi</h2>
         <p class="hint">Satu regex per baris, case-insensitive. Regex divalidasi sebelum disimpan. Cocok &rarr; ditolak tanpa memanggil LLM + strike.</p>
-        <textarea class="code" data-key="injection_patterns" data-type="list" rows="8" spellcheck="false"></textarea>
-        <div class="row end" style="margin-top:12px;">
-          <button type="button" data-save="#tab-guard">Simpan guard</button>
+        <textarea class="input code" data-key="injection_patterns" data-type="list" rows="8" spellcheck="false"></textarea>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-primary" data-save="#tab-guard">Simpan guard</button>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="tab hidden" id="tab-test">
+    <!-- ============ UJI COBA ============ -->
+    <section class="tab-panel hidden" id="tab-test" role="tabpanel">
       <div class="card">
         <h2>Uji coba</h2>
         <p class="hint">Memanggil <code>/api/test</code> dengan chat_id <code>admin-test</code>; tidak mengirim ke WhatsApp.</p>
         <div class="chat" id="testChat" aria-live="polite"></div>
         <form id="testForm" class="row">
-          <input id="testInput" type="text" placeholder="Tulis pertanyaan..." aria-label="Pertanyaan uji coba" style="flex:1;">
-          <button type="submit">Kirim</button>
+          <label class="sr-only" for="testInput">Pertanyaan uji coba</label>
+          <input id="testInput" class="input grow" type="text" placeholder="Tulis pertanyaan...">
+          <button type="submit" class="btn btn-primary">Kirim</button>
         </form>
-        <p class="meta" id="testMeta" style="margin-top:10px;">status / model / flag akan tampil di sini.</p>
+        <p class="meta" id="testMeta">status / model / flag akan tampil di sini.</p>
       </div>
-    </div>
+    </section>
 
-    <div class="tab hidden" id="tab-log">
+    <!-- ============ LOG ============ -->
+    <section class="tab-panel hidden" id="tab-log" role="tabpanel">
       <div class="card">
-        <h2>Log</h2>
-        <p class="hint">100 pesan terakhir. Nomor sudah disamarkan; rahasia tidak pernah ditampilkan.</p>
-        <div class="row" style="margin-bottom:10px;">
-          <button type="button" class="secondary" id="refreshLogs">Muat ulang</button>
-          <span class="muted" id="logInfo"></span>
+        <div class="card-head">
+          <div>
+            <h2>Log pesan</h2>
+            <p class="hint">100 pesan terakhir. Nomor WhatsApp ditampilkan lengkap; rahasia tidak pernah ditampilkan.</p>
+          </div>
+          <button type="button" class="btn btn-secondary" id="refreshLogs">Muat ulang</button>
         </div>
-        <div class="tablewrap">
-          <table>
+        <p class="muted small" id="logInfo"></p>
+        <div class="table-wrap">
+          <table class="table">
             <thead>
               <tr><th>Waktu</th><th>Chat</th><th>Pesan</th><th>Balasan</th><th>Status</th><th>ms</th><th>Model</th></tr>
             </thead>
@@ -353,12 +1188,33 @@
           </table>
         </div>
       </div>
-    </div>
-  </section>
-</main>
 
-<footer>Kaliber Bot &middot; LSO Kaliber UMM Informatika</footer>
-<div class="toast" id="toast" role="status"></div>
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Audit reveal key</h2>
+            <p class="hint">50 percobaan terakhir (berhasil dan gagal). Isi key tidak pernah dicatat.</p>
+          </div>
+          <button type="button" class="btn btn-secondary" id="refreshAudit">Muat ulang</button>
+        </div>
+        <p class="muted small" id="auditInfo"></p>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr><th>Waktu</th><th>Key ID</th><th>IP</th><th>Hasil</th></tr>
+            </thead>
+            <tbody id="auditBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <footer class="page-foot">Kaliber Bot &middot; LSO Kaliber UMM Informatika</footer>
+  </main>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toastRoot" class="toast-stack" role="status" aria-live="polite"></div>
 
 <script>
 (function () {
@@ -369,37 +1225,117 @@
     settings: null,
     defaults: null,
     limits: { knowledge_warn_chars: 12000 },
+    providers: [],
+    hasRevealPassword: false,
     tab: 'dashboard',
     statusTimer: null
+  };
+
+  var PAGE_META = {
+    dashboard: ['Dashboard', 'Status WhatsApp, runtime, dan level log.'],
+    prompt: ['Prompt', 'Template system prompt dan teks balasan statis.'],
+    knowledge: ['Knowledge', 'Sumber jawaban bot, hanya bisa diedit admin.'],
+    model: ['Model', 'Model utama, fallback, dan parameter LLM.'],
+    provider: ['Provider', 'Endpoint LLM, key, dan daftar model.'],
+    guard: ['Guard', 'Saklar, batas, dan filter injeksi.'],
+    test: ['Uji Coba', 'Coba alur bot tanpa mengirim ke WhatsApp.'],
+    log: ['Log', 'Riwayat pesan dan audit reveal key.']
+  };
+
+  var RESULT_LABEL = {
+    ok: 'berhasil',
+    wrong_password: 'password salah',
+    not_configured: 'password belum diatur',
+    key_not_found: 'key tidak ditemukan',
+    decrypt_failed: 'gagal dekripsi',
+    rate_limited: 'dibatasi rate limit',
+    no_password: 'password kosong',
+    bad_request: 'body tidak valid'
   };
 
   function $(sel, root) { return (root || document).querySelector(sel); }
   function $$(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
 
-  function toast(message, bad) {
-    var el = $('#toast');
-    el.textContent = message;
-    el.classList.toggle('bad', Boolean(bad));
-    el.classList.add('show');
-    clearTimeout(toast._t);
-    toast._t = setTimeout(function () { el.classList.remove('show'); }, 2600);
+  function appendChildren(node, child) {
+    if (child === null || child === undefined || child === false) return;
+    if (Array.isArray(child)) {
+      child.forEach(function (item) { appendChildren(node, item); });
+      return;
+    }
+    node.append(child && child.nodeType ? child : document.createTextNode(String(child)));
   }
 
-  function showLogin() {
-    $('#login').classList.remove('hidden');
-    $('#app').classList.add('hidden');
-    $('#tokenBtn').classList.add('hidden');
-    $('#waBadge').textContent = 'belum masuk';
-    $('#waDot').className = 'dot';
-    clearInterval(state.statusTimer);
+  function h(tag, props) {
+    var node = document.createElement(tag);
+    if (props) {
+      Object.keys(props).forEach(function (key) {
+        var value = props[key];
+        if (value === null || value === undefined || value === false) return;
+        if (key === 'class') node.className = value;
+        else if (key === 'text') node.textContent = value;
+        else if (key === 'dataset') Object.assign(node.dataset, value);
+        else if (key.slice(0, 2) === 'on') node.addEventListener(key.slice(2).toLowerCase(), value);
+        else node.setAttribute(key, value === true ? '' : String(value));
+      });
+    }
+    for (var i = 2; i < arguments.length; i += 1) appendChildren(node, arguments[i]);
+    return node;
   }
 
-  function showApp() {
-    $('#login').classList.add('hidden');
-    $('#app').classList.remove('hidden');
-    $('#tokenBtn').classList.remove('hidden');
+  function badge(text, variant) {
+    return h('span', { class: 'badge' + (variant ? ' badge-' + variant : ''), text: text });
   }
 
+  function fmtDate(ts) {
+    return new Date(ts).toLocaleString('id-ID');
+  }
+
+  function prettySeconds(total) {
+    total = Math.max(0, Math.floor(total));
+    var d = Math.floor(total / 86400);
+    var hrs = Math.floor((total % 86400) / 3600);
+    var mins = Math.floor((total % 3600) / 60);
+    if (d > 0) return d + 'h ' + hrs + 'j';
+    if (hrs > 0) return hrs + 'j ' + mins + 'm';
+    return mins + 'm ' + (total % 60) + 'd';
+  }
+
+  /* ---------- toast ---------- */
+  function toast(message, type) {
+    var kind = type === 'error' ? 'error' : (type === 'info' ? 'info' : 'success');
+    var icon = kind === 'error' ? '!' : (kind === 'info' ? 'i' : '\u2713');
+    var node = h('div', { class: 'toast ' + kind, role: 'status' },
+      h('span', { class: 'toast-icon', text: icon, 'aria-hidden': 'true' }),
+      h('span', { class: 'toast-text', text: message })
+    );
+    $('#toastRoot').append(node);
+    setTimeout(function () {
+      node.remove();
+    }, 4000);
+  }
+
+  /* ---------- theme ---------- */
+  function currentTheme() {
+    return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  }
+  function updateThemeButtons() {
+    var light = currentTheme() === 'light';
+    var target = light ? 'Gunakan tema gelap' : 'Gunakan tema terang';
+    $$('.js-theme').forEach(function (button) {
+      button.setAttribute('aria-label', target);
+      button.setAttribute('title', target);
+      button.textContent = light ? 'Terang' : 'Gelap';
+    });
+  }
+  function setTheme(theme, persist) {
+    document.documentElement.setAttribute('data-theme', theme);
+    if (persist) {
+      try { localStorage.setItem('kaliber_theme', theme); } catch (e) { /* abaikan */ }
+    }
+    updateThemeButtons();
+  }
+
+  /* ---------- api ---------- */
   async function api(path, options) {
     var opts = options || {};
     var headers = Object.assign({ 'content-type': 'application/json' }, opts.headers || {});
@@ -421,8 +1357,273 @@
     return data;
   }
 
-  function fill(root) {
-    $$('[data-key]', root).forEach(function (el) {
+  async function runAction(button, task) {
+    if (button) {
+      button.disabled = true;
+      button.classList.add('is-busy');
+    }
+    try {
+      await task();
+    } catch (err) {
+      toast(err.message || 'Terjadi kesalahan', 'error');
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.classList.remove('is-busy');
+      }
+    }
+  }
+
+  /* ---------- modal ---------- */
+  var activeModal = null;
+  var lastFocused = null;
+
+  function createModal(title, bodyNode, footerNode, onClose) {
+    closeModal();
+    lastFocused = document.activeElement;
+    var overlay = h('div', { class: 'modal-overlay' });
+    var dialog = h('div', {
+      class: 'modal',
+      role: 'dialog',
+      'aria-modal': 'true',
+      'aria-labelledby': 'modalTitle'
+    });
+    var closeBtn = h('button', {
+      type: 'button',
+      class: 'btn btn-ghost btn-icon',
+      'aria-label': 'Tutup',
+      onclick: closeModal
+    }, '\u00d7');
+    var head = h('div', { class: 'modal-head' },
+      h('h2', { class: 'modal-title', id: 'modalTitle', text: title }),
+      closeBtn
+    );
+    var body = h('div', { class: 'modal-body' }, bodyNode);
+    var foot = h('div', { class: 'modal-foot' }, footerNode);
+    dialog.append(head, body, foot);
+    overlay.append(dialog);
+    overlay.addEventListener('click', function (event) {
+      if (event.target === overlay) closeModal();
+    });
+    $('#modalRoot').append(overlay);
+    document.body.classList.add('modal-open');
+    activeModal = {
+      overlay: overlay,
+      dialog: dialog,
+      body: body,
+      footer: foot,
+      onClose: onClose,
+      cleanup: null
+    };
+    var first = dialog.querySelector('input, textarea, select, button:not([aria-label="Tutup"])');
+    if (first) first.focus();
+    return activeModal;
+  }
+
+  function setModalCleanup(fn) {
+    if (activeModal) activeModal.cleanup = fn;
+  }
+
+  function closeModal() {
+    if (!activeModal) return;
+    var modal = activeModal;
+    activeModal = null;
+    modal.overlay.remove();
+    document.body.classList.remove('modal-open');
+    if (modal.cleanup) modal.cleanup();
+    if (modal.onClose) modal.onClose();
+    if (lastFocused && typeof lastFocused.focus === 'function') lastFocused.focus();
+    lastFocused = null;
+  }
+
+  function makeField(opts) {
+    var input;
+    if (opts.type === 'textarea') {
+      input = h('textarea', { class: 'input mono' });
+      input.rows = opts.rows || 4;
+    } else if (opts.type === 'select') {
+      input = h('select', { class: 'input' });
+      (opts.options || []).forEach(function (option) {
+        var node = h('option', { value: option.value, text: option.label });
+        input.append(node);
+      });
+    } else {
+      input = h('input', { class: 'input', type: opts.type || 'text' });
+    }
+    if (opts.value !== undefined && opts.value !== null) input.value = String(opts.value);
+    if (opts.placeholder) input.setAttribute('placeholder', opts.placeholder);
+    if (opts.autocomplete) input.setAttribute('autocomplete', opts.autocomplete);
+    if (opts.minLength) input.setAttribute('minlength', String(opts.minLength));
+    if (opts.required) input.setAttribute('required', '');
+    input.setAttribute('aria-label', opts.label);
+    var wrap = h('label', { class: 'field' },
+      h('span', { class: 'field-label', text: opts.label }),
+      input,
+      opts.hint ? h('small', { class: 'field-hint', text: opts.hint }) : null
+    );
+    return { wrap: wrap, input: input };
+  }
+
+  function openFormModal(config) {
+    var form = h('form', { class: 'stack', novalidate: 'novalidate' });
+    var fields = [];
+    config.fields.forEach(function (field) {
+      if (field.type === 'switch') {
+        var check = h('input', { type: 'checkbox' });
+        check.checked = Boolean(field.value);
+        fields.push({ name: field.name, input: check, type: 'switch', required: false });
+        form.append(h('label', { class: 'switch' },
+          check,
+          h('span', { class: 'switch-track', 'aria-hidden': 'true' }),
+          h('span', { class: 'switch-label', text: field.label })
+        ));
+        return;
+      }
+      var made = makeField(field);
+      fields.push({
+        name: field.name,
+        input: made.input,
+        type: field.type || 'text',
+        required: Boolean(field.required)
+      });
+      form.append(made.wrap);
+    });
+
+    var error = h('p', { class: 'field-error', role: 'alert' });
+    form.append(error);
+
+    var cancel = h('button', {
+      type: 'button',
+      class: 'btn btn-secondary',
+      text: 'Batal',
+      onclick: closeModal
+    });
+    var submit = h('button', {
+      type: 'submit',
+      class: 'btn ' + (config.danger ? 'btn-danger' : 'btn-primary'),
+      text: config.submitLabel || 'Simpan'
+    });
+
+    createModal(config.title, form, h('div', { class: 'modal-foot' }, cancel, submit));
+
+    form.addEventListener('submit', async function (event) {
+      event.preventDefault();
+      error.textContent = '';
+      var values = {};
+      var invalid = false;
+      fields.forEach(function (field) {
+        var value = field.type === 'switch' ? field.input.checked : field.input.value;
+        if (typeof value === 'string') value = value.trim();
+        field.input.classList.remove('is-invalid');
+        if (field.required && value === '') {
+          invalid = true;
+          field.input.classList.add('is-invalid');
+        }
+        values[field.name] = value;
+      });
+      if (invalid) {
+        error.textContent = 'Lengkapi kolom wajib.';
+        return;
+      }
+      submit.disabled = true;
+      submit.classList.add('is-busy');
+      try {
+        await config.onSubmit(values, {
+          setError: function (message) { error.textContent = message; }
+        });
+        closeModal();
+      } catch (err) {
+        error.textContent = err.message || 'Gagal menyimpan';
+      } finally {
+        submit.disabled = false;
+        submit.classList.remove('is-busy');
+      }
+    });
+  }
+
+  function confirmModal(title, message, confirmLabel, danger) {
+    return new Promise(function (resolve) {
+      var done = false;
+      function finish(value) {
+        if (done) return;
+        done = true;
+        resolve(value);
+      }
+      var cancel = h('button', {
+        type: 'button',
+        class: 'btn btn-secondary',
+        text: 'Batal',
+        onclick: function () { finish(false); closeModal(); }
+      });
+      var confirmBtn = h('button', {
+        type: 'button',
+        class: 'btn ' + (danger ? 'btn-danger' : 'btn-primary'),
+        text: confirmLabel || 'Lanjutkan',
+        onclick: function () { finish(true); closeModal(); }
+      });
+      createModal(
+        title,
+        h('p', { class: 'modal-text', text: message }),
+        h('div', { class: 'modal-foot' }, cancel, confirmBtn),
+        function () { finish(false); }
+      );
+      confirmBtn.focus();
+    });
+  }
+
+  async function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    var helper = h('textarea', { class: 'sr-only' });
+    helper.value = text;
+    document.body.append(helper);
+    helper.select();
+    document.execCommand('copy');
+    helper.remove();
+  }
+
+  /* ---------- navigation / auth ---------- */
+  function showLogin() {
+    $('#loginView').classList.remove('hidden');
+    $('#appView').classList.add('hidden');
+    clearInterval(state.statusTimer);
+    state.statusTimer = null;
+  }
+
+  function showApp() {
+    $('#loginView').classList.add('hidden');
+    $('#appView').classList.remove('hidden');
+  }
+
+  function switchTab(name) {
+    state.tab = name;
+    $$('#tabs .tab-btn').forEach(function (button) {
+      var active = button.dataset.tab === name;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    $$('.tab-panel').forEach(function (panel) {
+      panel.classList.toggle('hidden', panel.id !== 'tab-' + name);
+    });
+    var meta = PAGE_META[name] || PAGE_META.dashboard;
+    $('#pageTitle').textContent = meta[0];
+    $('#pageSub').textContent = meta[1];
+    if (name === 'log') {
+      refreshLogs();
+      refreshAudit();
+    }
+    if (name === 'dashboard') refreshStatus();
+    if (name === 'knowledge') updateKnowledgeCount();
+    if (name === 'model') loadModelOptions();
+    if (name === 'provider') refreshProviders();
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
+  /* ---------- settings ---------- */
+  function fillAll() {
+    $$('[data-key]').forEach(function (el) {
       var value = state.settings ? state.settings[el.dataset.key] : undefined;
       var type = el.dataset.type;
       if (type === 'list') el.value = Array.isArray(value) ? value.join('\n') : '';
@@ -437,7 +1638,7 @@
     $$('[data-key]', root).forEach(function (el) {
       var type = el.dataset.type;
       if (type === 'list') {
-        out[el.dataset.key] = el.value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+        out[el.dataset.key] = el.value.split('\n').map(function (line) { return line.trim(); }).filter(Boolean);
       } else if (type === 'bool') {
         out[el.dataset.key] = el.checked;
       } else if (type === 'num') {
@@ -467,44 +1668,79 @@
     state.settings = data.settings;
     state.defaults = data.defaults;
     state.limits = data.limits || state.limits;
-    $$('.tab').forEach(fill);
+    state.hasRevealPassword = Boolean(data.has_reveal_password);
+    fillAll();
     updateKnowledgeCount();
   }
 
   async function saveSection(selector) {
-    var root = $(selector);
+    var root = typeof selector === 'string' ? $(selector) : selector;
+    if (!root) return;
+    var payload = read(root);
+    if (Object.keys(payload).length === 0) return;
+    var data = await api('/api/settings', { method: 'PUT', body: JSON.stringify(payload) });
+    state.settings = data.settings;
+    fillAll();
+    updateKnowledgeCount();
+    toast('Tersimpan');
+  }
+
+  /* ---------- daftar model dari provider ---------- */
+  async function loadModelOptions() {
+    var status = $('#modelStatus');
+    if (!status) return;
+    status.textContent = 'memuat model...';
     try {
-      var data = await api('/api/settings', { method: 'PUT', body: JSON.stringify(read(root)) });
-      state.settings = data.settings;
-      $$('.tab').forEach(fill);
-      updateKnowledgeCount();
-      toast('Tersimpan');
+      var data = await api('/api/models');
+      var models = data.models || [];
+      var options = $('#modelOptions');
+      options.replaceChildren();
+      models.forEach(function (item) {
+        options.append(h('option', { value: item.value, label: item.value }));
+      });
+      var providers = {};
+      models.forEach(function (item) { providers[item.provider] = true; });
+      var providerCount = Object.keys(providers).length;
+      var input = $('#modelInput');
+      if (state.settings && !state.settings.model && models.length > 0) {
+        var firstModel = models[0].value;
+        input.value = firstModel;
+        try {
+          var saved = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ model: firstModel }) });
+          state.settings = saved.settings;
+          status.textContent = models.length + ' model dari ' + providerCount + ' provider. Default "' + firstModel + '" disimpan otomatis.';
+          toast('Model default dari provider: ' + firstModel);
+        } catch (err) {
+          status.textContent = models.length + ' model dari ' + providerCount + ' provider. Default diisi "' + firstModel + '"; klik Simpan model.';
+        }
+      } else {
+        status.textContent = models.length + ' model dari ' + providerCount + ' provider.';
+      }
+      var errors = data.errors || [];
+      if (errors.length > 0) {
+        status.textContent += ' Gagal: ' + errors.map(function (item) {
+          return item.provider + ' (' + item.error + ')';
+        }).join(', ');
+      }
     } catch (err) {
-      toast(err.message, true);
+      status.textContent = 'Gagal memuat model: ' + err.message;
     }
   }
 
-  function prettySeconds(total) {
-    total = Math.max(0, Math.floor(total));
-    var d = Math.floor(total / 86400);
-    var h = Math.floor((total % 86400) / 3600);
-    var m = Math.floor((total % 3600) / 60);
-    if (d > 0) return d + 'h ' + h + 'j';
-    if (h > 0) return h + 'j ' + m + 'm';
-    return m + 'm ' + (total % 60) + 'd';
-  }
-
+  /* ---------- status ---------- */
   function renderStatus(s) {
     var wa = s.wa || {};
-    var labels = {
-      open: ['terhubung', 'ok'],
-      connecting: ['menghubungkan', 'warn'],
-      logged_out: ['perlu login ulang', 'bad'],
-      disconnected: ['terputus', 'bad']
+    var map = {
+      open: { text: 'Terhubung', dot: 'ok', badge: 'success' },
+      connecting: { text: 'Menghubungkan', dot: 'warn', badge: 'warning' },
+      logged_out: { text: 'Perlu login ulang', dot: 'bad', badge: 'danger' },
+      disconnected: { text: 'Terputus', dot: 'bad', badge: 'danger' }
     };
-    var pair = labels[wa.state] || ['tidak diketahui', 'bad'];
-    $('#waBadge').textContent = 'WA: ' + pair[0];
-    $('#waDot').className = 'dot ' + pair[1];
+    var info = map[wa.state] || { text: 'Tidak diketahui', dot: '', badge: '' };
+    $('#waText').textContent = 'WA: ' + info.text;
+    $('#waDot').className = 'dot ' + info.dot;
+    $('#waBadge').className = 'badge' + (info.badge ? ' badge-' + info.badge : '');
+    $('#waBadge').textContent = info.text;
 
     $('#statBot').textContent = s.bot && s.bot.enabled ? 'ON' : 'OFF';
     $('#statUptime').textContent = prettySeconds(s.uptimeSec || 0);
@@ -515,10 +1751,7 @@
     $('#statMutes').textContent = s.mutes || 0;
     $('#statModel').textContent = s.model || 'belum diatur';
     $('#routerInfo').textContent = '9router: ' + (s.routerUrl || '-');
-    $('#botStateText').textContent = s.bot && s.bot.enabled
-      ? 'Bot menerima pesan.'
-      : 'Bot sedang dimatikan (pesan diabaikan).';
-    $('#toggleBot').textContent = s.bot && s.bot.enabled ? 'Matikan bot' : 'Nyalakan bot';
+    $('#botSwitch').checked = Boolean(s.bot && s.bot.enabled);
 
     var img = $('#qrImage');
     if (wa.qrDataUrl) {
@@ -533,15 +1766,9 @@
         : 'QR muncul saat bot sedang menghubungkan.';
     }
     if (wa.pairingCode) {
-      $('#pairResult').innerHTML = '';
-      var box = document.createElement('div');
-      box.className = 'code';
-      box.textContent = wa.pairingCode;
-      var note = document.createElement('p');
-      note.className = 'muted';
-      note.textContent = 'Masukkan kode ini di WhatsApp > Perangkat tertaut > Tautkan dengan nomor telepon.';
-      $('#pairResult').appendChild(box);
-      $('#pairResult').appendChild(note);
+      var box = h('div', { class: 'pair-code', text: wa.pairingCode });
+      var note = h('p', { class: 'hint', text: 'Masukkan kode ini di WhatsApp > Perangkat tertaut > Tautkan dengan nomor telepon.' });
+      $('#pairResult').replaceChildren(box, note);
     }
     if (wa.lastError) $('#qrHint').textContent = wa.lastError;
   }
@@ -549,92 +1776,536 @@
   async function refreshStatus() {
     if (!state.token) return;
     try {
-      var status = await api('/api/status');
-      renderStatus(status);
+      renderStatus(await api('/api/status'));
     } catch (err) {
-      if (state.token) $('#waBadge').textContent = 'WA: error';
+      if (state.token) $('#waBadge').textContent = 'Gagal memuat status';
     }
+  }
+
+  function startStatusTimer() {
+    clearInterval(state.statusTimer);
+    state.statusTimer = setInterval(refreshStatus, 5000);
+  }
+
+  /* ---------- tables ---------- */
+  function tableRow(cells) {
+    var tr = h('tr');
+    cells.forEach(function (cell) {
+      var td = h('td', { class: cell.className || '' });
+      td.dataset.label = cell.label;
+      appendChildren(td, cell.content);
+      tr.append(td);
+    });
+    return tr;
+  }
+
+  function logStatusBadge(status) {
+    if (status === 'ok') return badge(status, 'success');
+    if (status === 'blocked' || status === 'error') return badge(status, 'danger');
+    if (status === 'injection' || status === 'ratelimit') return badge(status, 'warning');
+    return badge(status, '');
   }
 
   async function refreshLogs() {
     try {
       var data = await api('/api/logs');
-      var body = $('#logBody');
-      body.textContent = '';
       var logs = data.logs || [];
       $('#logInfo').textContent = logs.length + ' baris terakhir';
+      var body = $('#logBody');
+      body.replaceChildren();
       logs.forEach(function (row) {
-        var tr = document.createElement('tr');
-        var cells = [
-          new Date(row.ts).toLocaleString('id-ID'),
-          row.chatId,
-          row.message,
-          row.reply || '-',
-          row.status,
-          String(row.latencyMs),
-          row.model || '-'
-        ];
-        cells.forEach(function (value, index) {
-          var td = document.createElement('td');
-          td.textContent = value;
-          if (index === 0) td.style.whiteSpace = 'nowrap';
-          if (index === 2 || index === 3) td.className = 'msg';
-          if (index === 4) {
-            var pill = document.createElement('span');
-            pill.className = 'pill ' + row.status;
-            pill.textContent = row.status;
-            td.textContent = '';
-            td.appendChild(pill);
-          }
-          tr.appendChild(td);
-        });
-        body.appendChild(tr);
+        body.append(tableRow([
+          { label: 'Waktu', content: fmtDate(row.ts), className: 'nowrap' },
+          { label: 'Chat', content: h('span', { class: 'mono', text: row.chatId }) },
+          { label: 'Pesan', content: row.message, className: 'cell-msg' },
+          { label: 'Balasan', content: row.reply || '-', className: 'cell-msg' },
+          { label: 'Status', content: logStatusBadge(row.status) },
+          { label: 'ms', content: String(row.latencyMs), className: 'mono' },
+          { label: 'Model', content: row.model || '-', className: 'mono' }
+        ]));
       });
     } catch (err) {
-      toast(err.message, true);
+      toast(err.message, 'error');
     }
   }
 
-  function switchTab(name) {
-    state.tab = name;
-    $$('#tabs button').forEach(function (button) {
-      button.classList.toggle('active', button.dataset.tab === name);
-    });
-    $$('.tab').forEach(function (panel) {
-      panel.classList.toggle('hidden', panel.id !== 'tab-' + name);
-    });
-    if (name === 'log') refreshLogs();
-    if (name === 'dashboard') refreshStatus();
-    if (name === 'knowledge') updateKnowledgeCount();
+  async function refreshAudit() {
+    try {
+      var data = await api('/api/audit');
+      var entries = data.entries || [];
+      $('#auditInfo').textContent = entries.length + ' entri terakhir';
+      var body = $('#auditBody');
+      body.replaceChildren();
+      entries.forEach(function (entry) {
+        body.append(tableRow([
+          { label: 'Waktu', content: fmtDate(entry.ts), className: 'nowrap' },
+          { label: 'Key ID', content: h('span', { class: 'mono', text: '#' + entry.keyId }) },
+          { label: 'IP', content: h('span', { class: 'mono', text: entry.ip }) },
+          {
+            label: 'Hasil',
+            content: h('div', { class: 'row' },
+              badge(entry.success ? 'Berhasil' : 'Gagal', entry.success ? 'success' : 'danger'),
+              h('span', { class: 'muted small', text: RESULT_LABEL[entry.result] || entry.result || '-' })
+            )
+          }
+        ]));
+      });
+    } catch (err) {
+      toast(err.message, 'error');
+    }
   }
 
+  /* ---------- providers ---------- */
+  function skeleton() {
+    return h('div', { class: 'skeleton' },
+      h('div', { class: 'skeleton-line' }),
+      h('div', { class: 'skeleton-line' }),
+      h('div', { class: 'skeleton-line' })
+    );
+  }
+
+  async function refreshProviders() {
+    var list = $('#providersList');
+    list.replaceChildren(skeleton());
+    try {
+      var data = await api('/api/providers');
+      state.providers = data.providers || [];
+      renderProviders();
+    } catch (err) {
+      list.replaceChildren(h('div', { class: 'empty' }, h('p', { text: 'Gagal memuat provider: ' + err.message })));
+    }
+  }
+
+  function renderProviders() {
+    var list = $('#providersList');
+    list.replaceChildren();
+    if (state.providers.length === 0) {
+      list.append(h('div', { class: 'empty' },
+        h('p', { text: 'Belum ada provider.' }),
+        h('button', {
+          type: 'button',
+          class: 'btn btn-primary',
+          text: 'Tambah provider',
+          onclick: function () { openProviderModal(null); }
+        })
+      ));
+      return;
+    }
+    state.providers.forEach(function (provider) {
+      list.append(renderProviderCard(provider));
+    });
+  }
+
+  function renderProviderCard(provider) {
+    var enabledInput = h('input', { type: 'checkbox' });
+    enabledInput.checked = provider.enabled;
+    enabledInput.addEventListener('change', function () {
+      var target = enabledInput.checked;
+      enabledInput.disabled = true;
+      api('/api/providers/' + provider.id + '/toggle', {
+        method: 'POST',
+        body: JSON.stringify({ enabled: target })
+      }).then(function () {
+        toast(target ? 'Provider diaktifkan' : 'Provider dinonaktifkan');
+        return refreshProviders();
+      }).catch(function (err) {
+        enabledInput.checked = !target;
+        enabledInput.disabled = false;
+        toast(err.message, 'error');
+      });
+    });
+    var providerSwitch = h('label', { class: 'switch' },
+      enabledInput,
+      h('span', { class: 'switch-track', 'aria-hidden': 'true' }),
+      h('span', { class: 'switch-label', text: 'Aktif' })
+    );
+    var editBtn = h('button', {
+      type: 'button',
+      class: 'btn btn-secondary btn-sm',
+      text: 'Edit',
+      onclick: function () { openProviderModal(provider); }
+    });
+    var deleteBtn = h('button', {
+      type: 'button',
+      class: 'btn btn-danger btn-sm',
+      text: 'Hapus',
+      onclick: function () {
+        confirmModal(
+          'Hapus provider',
+          'Provider "' + provider.name + '" beserta semua key-nya akan dihapus. Tindakan ini tidak bisa dibatalkan.',
+          'Hapus provider',
+          true
+        ).then(function (yes) {
+          if (!yes) return;
+          runAction(deleteBtn, async function () {
+            await api('/api/providers/' + provider.id, { method: 'DELETE' });
+            toast('Provider dihapus');
+            await refreshProviders();
+          });
+        });
+      }
+    });
+    var testBtn = h('button', {
+      type: 'button',
+      class: 'btn btn-secondary btn-sm',
+      text: 'Tes koneksi',
+      onclick: function () { testProvider(provider, testBtn); }
+    });
+    var modelsBtn = h('button', {
+      type: 'button',
+      class: 'btn btn-secondary btn-sm',
+      text: 'Lihat model',
+      onclick: function () { openProviderModelsModal(provider); }
+    });
+    var addKeyBtn = h('button', {
+      type: 'button',
+      class: 'btn btn-secondary btn-sm',
+      text: '+ Tambah key',
+      onclick: function () { openKeyModal(provider); }
+    });
+
+    var keyList = h('div', { class: 'key-list' });
+    if (provider.keys.length === 0) {
+      keyList.append(h('p', { class: 'hint', text: 'Belum ada key untuk provider ini.' }));
+    } else {
+      provider.keys.forEach(function (key) {
+        keyList.append(renderKeyRow(provider, key));
+      });
+    }
+
+    return h('article', { class: 'provider-card' },
+      h('div', { class: 'provider-head' },
+        h('div', {},
+          h('div', { class: 'provider-title' },
+            h('h3', { text: provider.name }),
+            badge(provider.enabled ? 'Aktif' : 'Nonaktif', provider.enabled ? 'success' : 'danger'),
+            badge('Prioritas ' + provider.priority, '')
+          ),
+          h('p', { class: 'provider-base mono', text: provider.baseUrl })
+        ),
+        h('div', { class: 'row' }, providerSwitch, editBtn, deleteBtn)
+      ),
+      h('div', { class: 'provider-keys-head' },
+        h('h4', { text: 'API key' }),
+        h('div', { class: 'row' }, modelsBtn, testBtn, addKeyBtn)
+      ),
+      keyList
+    );
+  }
+
+  function renderKeyRow(provider, key) {
+    var toggleBtn = h('button', {
+      type: 'button',
+      class: 'btn btn-secondary btn-sm',
+      text: key.enabled ? 'Nonaktifkan' : 'Aktifkan',
+      onclick: function () {
+        runAction(toggleBtn, async function () {
+          await api('/api/providers/' + provider.id + '/keys/' + key.id + '/toggle', {
+            method: 'POST',
+            body: JSON.stringify({ enabled: !key.enabled })
+          });
+          await refreshProviders();
+        });
+      }
+    });
+    var revealBtn = h('button', {
+      type: 'button',
+      class: 'btn btn-secondary btn-sm',
+      text: 'Lihat key',
+      onclick: function () { openRevealModal(key); }
+    });
+    var deleteBtn = h('button', {
+      type: 'button',
+      class: 'btn btn-danger btn-sm',
+      text: 'Hapus',
+      onclick: function () {
+        confirmModal(
+          'Hapus key',
+          'Key "' + key.label + '" akan dihapus dari provider ' + provider.name + '.',
+          'Hapus key',
+          true
+        ).then(function (yes) {
+          if (!yes) return;
+          runAction(deleteBtn, async function () {
+            await api('/api/providers/' + provider.id + '/keys/' + key.id, { method: 'DELETE' });
+            toast('Key dihapus');
+            await refreshProviders();
+          });
+        });
+      }
+    });
+
+    return h('div', { class: 'key-row' },
+      h('div', { class: 'key-meta' },
+        badge(key.enabled ? 'Aktif' : 'Nonaktif', key.enabled ? 'success' : 'danger'),
+        h('span', { class: 'mono', text: key.label }),
+        h('code', { class: 'key-mask', text: key.keyLast4 })
+      ),
+      h('div', { class: 'row' }, toggleBtn, revealBtn, deleteBtn)
+    );
+  }
+
+  async function testProvider(provider, button) {
+    await runAction(button, async function () {
+      var result = await api('/api/providers/' + provider.id + '/test', { method: 'POST', body: '{}' });
+      if (result.ok) {
+        var modelCount = Array.isArray(result.models) ? result.models.length : 0;
+        toast('Koneksi OK · ' + modelCount + ' model · ' + result.latencyMs + ' ms');
+      } else {
+        var detail = result.status ? 'HTTP ' + result.status : (result.error || 'gagal');
+        toast('Koneksi gagal: ' + detail, 'error');
+      }
+    });
+  }
+
+  function openProviderModelsModal(provider) {
+    var loading = h('p', { class: 'hint', text: 'Memuat model dari provider...' });
+    var close = h('button', { type: 'button', class: 'btn btn-secondary', text: 'Tutup', onclick: closeModal });
+    var modal = createModal('Model · ' + provider.name, loading, h('div', { class: 'modal-foot' }, close));
+    api('/api/providers/' + provider.id + '/models').then(function (data) {
+      var models = data.models || [];
+      if (models.length === 0) {
+        modal.body.replaceChildren(h('p', {
+          class: 'hint',
+          text: data.error ? 'Gagal memuat model: ' + data.error : 'Provider tidak mengembalikan daftar model.'
+        }));
+        return;
+      }
+      var list = h('div', { class: 'key-list' });
+      models.forEach(function (model) {
+        var useBtn = h('button', {
+          type: 'button',
+          class: 'btn btn-secondary btn-sm',
+          text: 'Pakai',
+          onclick: function () {
+            $('#modelInput').value = provider.name + '/' + model;
+            closeModal();
+            switchTab('model');
+            toast('Model dipilih. Klik Simpan model.');
+          }
+        });
+        list.append(h('div', { class: 'key-row' },
+          h('span', { class: 'mono grow', text: model }),
+          useBtn
+        ));
+      });
+      modal.body.replaceChildren(
+        h('p', { class: 'hint', text: 'Klik “Pakai” untuk mengisi model utama sebagai namaProvider/namaModel.' }),
+        list
+      );
+    }).catch(function (err) {
+      modal.body.replaceChildren(h('p', { class: 'hint', text: 'Gagal memuat model: ' + err.message }));
+    });
+  }
+
+  function openProviderModal(provider) {
+    var fields = [
+      {
+        name: 'name',
+        label: 'Nama provider',
+        value: provider ? provider.name : '',
+        placeholder: 'contoh: 9router',
+        required: true
+      },
+      {
+        name: 'baseUrl',
+        label: 'Base URL',
+        value: provider ? provider.baseUrl : '',
+        placeholder: 'http://127.0.0.1:20128/v1',
+        hint: 'Boleh dengan atau tanpa /v1; /chat/completions tidak perlu ditulis.',
+        required: true
+      },
+      {
+        name: 'priority',
+        label: 'Prioritas',
+        type: 'number',
+        value: provider ? provider.priority : 0,
+        hint: 'Angka kecil didahulukan.'
+      }
+    ];
+    if (provider) {
+      fields.push({ name: 'enabled', label: 'Provider aktif', type: 'switch', value: provider.enabled });
+    } else {
+      fields.push({
+        name: 'apiKey',
+        label: 'API key (opsional)',
+        type: 'password',
+        autocomplete: 'off',
+        hint: 'Langsung disimpan terenkripsi bersama provider dan dipakai untuk mengambil daftar model.'
+      });
+    }
+
+    openFormModal({
+      title: provider ? 'Ubah provider' : 'Tambah provider',
+      fields: fields,
+      submitLabel: provider ? 'Simpan' : 'Tambah',
+      onSubmit: async function (values) {
+        var priority = Number(values.priority);
+        if (!Number.isFinite(priority)) priority = 0;
+        if (provider) {
+          await api('/api/providers/' + provider.id, {
+            method: 'PUT',
+            body: JSON.stringify({
+              name: values.name,
+              baseUrl: values.baseUrl,
+              priority: priority,
+              enabled: Boolean(values.enabled)
+            })
+          });
+          toast('Provider diperbarui');
+        } else {
+          var created = await api('/api/providers', {
+            method: 'POST',
+            body: JSON.stringify({ name: values.name, baseUrl: values.baseUrl, priority: priority })
+          });
+          if (values.apiKey) {
+            try {
+              await api('/api/providers/' + created.provider.id + '/keys', {
+                method: 'POST',
+                body: JSON.stringify({ label: 'primary', apiKey: values.apiKey })
+              });
+            } catch (err) {
+              await refreshProviders();
+              throw new Error('Provider dibuat, tetapi API key gagal ditambahkan: ' + err.message);
+            }
+          }
+          toast('Provider ditambahkan');
+        }
+        await refreshProviders();
+      }
+    });
+  }
+
+  function openKeyModal(provider) {
+    openFormModal({
+      title: 'Tambah key · ' + provider.name,
+      fields: [
+        { name: 'label', label: 'Label', placeholder: 'contoh: primary', value: '', required: true },
+        {
+          name: 'apiKey',
+          label: 'API key',
+          type: 'password',
+          autocomplete: 'off',
+          hint: 'Disimpan terenkripsi AES-256-GCM; hanya tampil sebagai mask.',
+          required: true
+        }
+      ],
+      submitLabel: 'Tambah key',
+      onSubmit: async function (values) {
+        await api('/api/providers/' + provider.id + '/keys', {
+          method: 'POST',
+          body: JSON.stringify({ label: values.label, apiKey: values.apiKey })
+        });
+        toast('Key ditambahkan');
+        await refreshProviders();
+      }
+    });
+  }
+
+  /* ---------- reveal key ---------- */
+  function openRevealModal(key) {
+    if (!state.hasRevealPassword) {
+      toast('Password reveal belum diatur. Set REVEAL_PASSWORD di .env server lalu restart.', 'error');
+      return;
+    }
+    var made = makeField({
+      label: 'Password reveal',
+      type: 'password',
+      autocomplete: 'current-password',
+      required: true
+    });
+    var error = h('p', { class: 'field-error', role: 'alert' });
+    var form = h('form', { class: 'stack' },
+      h('p', { class: 'hint', text: 'Key akan tampil selama 30 detik, lalu disembunyikan otomatis.' }),
+      made.wrap,
+      error
+    );
+    var cancel = h('button', { type: 'button', class: 'btn btn-secondary', text: 'Batal', onclick: closeModal });
+    var submit = h('button', { type: 'submit', class: 'btn btn-primary', text: 'Buka key' });
+    var modal = createModal('Lihat key · ' + key.label, form, h('div', { class: 'modal-foot' }, cancel, submit));
+
+    form.addEventListener('submit', async function (event) {
+      event.preventDefault();
+      error.textContent = '';
+      var password = made.input.value;
+      if (!password) {
+        error.textContent = 'Password wajib diisi.';
+        return;
+      }
+      submit.disabled = true;
+      submit.classList.add('is-busy');
+      try {
+        var data = await api('/api/keys/' + key.id + '/reveal', {
+          method: 'POST',
+          body: JSON.stringify({ password: password })
+        });
+        showRevealedKey(modal, data);
+      } catch (err) {
+        error.textContent = err.message;
+      } finally {
+        submit.disabled = false;
+        submit.classList.remove('is-busy');
+      }
+    });
+  }
+
+  function showRevealedKey(modal, data) {
+    var plain = data.plainKey;
+    var code = h('code', { class: 'key-value mono', text: plain });
+    var countdown = h('p', { class: 'key-countdown', text: 'Key disembunyikan otomatis dalam 30 detik.' });
+    var copyBtn = h('button', { type: 'button', class: 'btn btn-secondary btn-sm', text: 'Salin' });
+    var hideBtn = h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'Sembunyikan sekarang' });
+    var timer = null;
+
+    modal.body.replaceChildren(
+      h('div', { class: 'stack' },
+        h('p', { class: 'hint', text: 'Jangan bagikan key ini. Key hanya ada di memori browser sampai ditutup.' }),
+        h('div', { class: 'key-box' }, code, copyBtn),
+        countdown
+      )
+    );
+    modal.footer.replaceChildren(h('div', { class: 'modal-foot' }, hideBtn));
+
+    function hide() {
+      if (timer) clearInterval(timer);
+      timer = null;
+      plain = null;
+      code.textContent = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
+      copyBtn.disabled = true;
+      hideBtn.disabled = true;
+      countdown.textContent = 'Key disembunyikan.';
+    }
+
+    var remaining = 30;
+    timer = setInterval(function () {
+      remaining -= 1;
+      if (remaining <= 0) {
+        hide();
+        return;
+      }
+      countdown.textContent = 'Key disembunyikan otomatis dalam ' + remaining + ' detik.';
+    }, 1000);
+
+    copyBtn.addEventListener('click', function () {
+      if (!plain) return;
+      copyText(plain).then(function () {
+        toast('Key disalin');
+      }).catch(function () {
+        toast('Gagal menyalin key', 'error');
+      });
+    });
+    hideBtn.addEventListener('click', hide);
+    setModalCleanup(hide);
+  }
+
+  /* ---------- test chat ---------- */
   function addBubble(text, kind) {
     var chat = $('#testChat');
-    var bubble = document.createElement('div');
-    bubble.className = 'bubble ' + kind;
-    bubble.textContent = text;
-    chat.appendChild(bubble);
+    chat.append(h('div', { class: 'bubble ' + kind, text: text }));
     chat.scrollTop = chat.scrollHeight;
   }
 
-  async function login() {
-    state.token = $('#tokenInput').value.trim();
-    if (!state.token) return;
-    $('#loginError').textContent = '';
-    sessionStorage.setItem('kaliber_token', state.token);
-    try {
-      await loadSettings();
-      showApp();
-      await refreshStatus();
-      switchTab(state.tab);
-    } catch (err) {
-      if (!state.token) return;
-      $('#loginError').textContent = err.message;
-      sessionStorage.removeItem('kaliber_token');
-      state.token = '';
-    }
-  }
-
+  /* ---------- bind ---------- */
   function bind() {
     $('#loginForm').addEventListener('submit', function (event) {
       event.preventDefault();
@@ -656,7 +2327,7 @@
 
     $$('[data-save]').forEach(function (button) {
       button.addEventListener('click', function () {
-        saveSection(button.dataset.save);
+        runAction(button, function () { return saveSection(button.dataset.save); });
       });
     });
 
@@ -664,72 +2335,70 @@
       button.addEventListener('click', function () {
         var root = $(button.dataset.reset);
         $$('[data-key]', root).forEach(function (el) {
-          var key = el.dataset.key;
-          var value = state.defaults ? state.defaults[key] : undefined;
+          var value = state.defaults ? state.defaults[el.dataset.key] : undefined;
           if (el.dataset.type === 'list') el.value = Array.isArray(value) ? value.join('\n') : '';
           else if (el.dataset.type === 'bool') el.checked = Boolean(value);
           else el.value = value === undefined ? '' : String(value);
         });
-        toast('Field diisi default. Klik Simpan untuk menerapkan.');
+        toast('Field diisi default. Klik Simpan untuk menerapkan.', 'info');
       });
     });
 
-    var knowledgeArea = $('#tab-knowledge [data-key="knowledge"]');
-    knowledgeArea.addEventListener('input', updateKnowledgeCount);
+    $('#tab-knowledge [data-key="knowledge"]').addEventListener('input', updateKnowledgeCount);
 
-    $('#toggleBot').addEventListener('click', async function () {
-      try {
-        await api('/api/bot/toggle', { method: 'POST', body: '{}' });
+    $('#botSwitch').addEventListener('change', function () {
+      var input = this;
+      runAction(null, async function () {
+        await api('/api/bot/toggle', {
+          method: 'POST',
+          body: JSON.stringify({ enabled: input.checked })
+        });
         await refreshStatus();
-      } catch (err) { toast(err.message, true); }
+      });
     });
 
-    $('#pairBtn').addEventListener('click', async function () {
+    $('#pairBtn').addEventListener('click', function () {
+      var button = this;
       var phone = $('#pairPhone').value.trim();
-      if (!phone) { toast('Isi nomor dulu', true); return; }
-      var button = this;
-      button.disabled = true;
-      try {
-        var data = await api('/api/wa/pairing', { method: 'POST', body: JSON.stringify({ phone: phone }) });
-        $('#pairResult').textContent = '';
-        var box = document.createElement('div');
-        box.className = 'code';
-        box.textContent = data.code;
-        var note = document.createElement('p');
-        note.className = 'muted';
-        note.textContent = 'Masukkan kode ini di WhatsApp > Perangkat tertaut > Tautkan dengan nomor telepon.';
-        $('#pairResult').appendChild(box);
-        $('#pairResult').appendChild(note);
-      } catch (err) {
-        toast(err.message, true);
-      } finally {
-        button.disabled = false;
+      if (!phone) {
+        toast('Isi nomor dulu', 'error');
+        return;
       }
+      runAction(button, async function () {
+        var data = await api('/api/wa/pairing', { method: 'POST', body: JSON.stringify({ phone: phone }) });
+        $('#pairResult').replaceChildren(
+          h('div', { class: 'pair-code', text: data.code }),
+          h('p', { class: 'hint', text: 'Masukkan kode ini di WhatsApp > Perangkat tertaut > Tautkan dengan nomor telepon.' })
+        );
+      });
     });
 
-    $('#logoutBtn').addEventListener('click', async function () {
-      if (!confirm('Putuskan sesi WhatsApp? Bot perlu login ulang.')) return;
-      try {
-        await api('/api/wa/logout', { method: 'POST', body: '{}' });
-        toast('Sesi WhatsApp diputus');
-        await refreshStatus();
-      } catch (err) { toast(err.message, true); }
-    });
-
-    $('#pingBtn').addEventListener('click', async function () {
+    $('#logoutBtn').addEventListener('click', function () {
       var button = this;
-      button.disabled = true;
+      confirmModal('Logout WhatsApp', 'Putuskan sesi WhatsApp? Bot perlu login ulang.', 'Logout', true)
+        .then(function (yes) {
+          if (!yes) return;
+          runAction(button, async function () {
+            await api('/api/wa/logout', { method: 'POST', body: '{}' });
+            toast('Sesi WhatsApp diputus');
+            await refreshStatus();
+          });
+        });
+    });
+
+    $('#loadModelsBtn').addEventListener('click', function () {
+      loadModelOptions();
+    });
+
+    $('#pingBtn').addEventListener('click', function () {
+      var button = this;
       $('#pingResult').textContent = 'menguji...';
-      try {
+      runAction(button, async function () {
         var data = await api('/api/llm/ping', { method: 'POST', body: '{}' });
         $('#pingResult').textContent = data.ok
           ? 'OK ' + data.latencyMs + ' ms via ' + (data.model || '-')
           : 'Gagal: ' + (data.error || 'tidak diketahui');
-      } catch (err) {
-        $('#pingResult').textContent = 'Gagal: ' + err.message;
-      } finally {
-        button.disabled = false;
-      }
+      });
     });
 
     $('#testForm').addEventListener('submit', async function (event) {
@@ -741,6 +2410,7 @@
       input.value = '';
       var button = this.querySelector('button');
       button.disabled = true;
+      button.classList.add('is-busy');
       try {
         var data = await api('/api/test', { method: 'POST', body: JSON.stringify({ text: text }) });
         addBubble(data.reply || '(tidak ada balasan)', 'bot');
@@ -754,15 +2424,66 @@
         addBubble('Error: ' + err.message, 'bot');
       } finally {
         button.disabled = false;
+        button.classList.remove('is-busy');
         input.focus();
       }
     });
 
     $('#refreshLogs').addEventListener('click', refreshLogs);
+    $('#refreshAudit').addEventListener('click', refreshAudit);
+    $('#refreshProviders').addEventListener('click', refreshProviders);
+    $('#addProviderBtn').addEventListener('click', function () { openProviderModal(null); });
+
+    $$('.js-theme').forEach(function (button) {
+      button.addEventListener('click', function () {
+        setTheme(currentTheme() === 'light' ? 'dark' : 'light', true);
+      });
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && activeModal) {
+        event.preventDefault();
+        closeModal();
+      }
+    });
+
+    if (window.matchMedia) {
+      var media = window.matchMedia('(prefers-color-scheme: light)');
+      var onChange = function (event) {
+        var saved = null;
+        try { saved = localStorage.getItem('kaliber_theme'); } catch (e) { saved = null; }
+        if (saved === 'light' || saved === 'dark') return;
+        setTheme(event.matches ? 'light' : 'dark', false);
+      };
+      if (media.addEventListener) media.addEventListener('change', onChange);
+      else if (media.addListener) media.addListener(onChange);
+    }
+  }
+
+  /* ---------- login / boot ---------- */
+  async function login() {
+    var token = $('#tokenInput').value.trim();
+    if (!token) return;
+    state.token = token;
+    sessionStorage.setItem('kaliber_token', token);
+    $('#loginError').textContent = '';
+    try {
+      await loadSettings();
+      showApp();
+      await refreshStatus();
+      switchTab(state.tab);
+      startStatusTimer();
+    } catch (err) {
+      state.token = '';
+      sessionStorage.removeItem('kaliber_token');
+      showLogin();
+      $('#loginError').textContent = err.message;
+    }
   }
 
   async function boot() {
     bind();
+    setTheme(currentTheme(), false);
     if (!state.token) {
       showLogin();
       $('#tokenInput').focus();
@@ -773,7 +2494,7 @@
       showApp();
       await refreshStatus();
       switchTab('dashboard');
-      state.statusTimer = setInterval(refreshStatus, 5000);
+      startStatusTimer();
     } catch (err) {
       showLogin();
       $('#loginError').textContent = err.message;

@@ -1,6 +1,6 @@
 import { DEFAULT_SETTINGS, findKnowledgeTemplate, type Settings } from './config.js';
 import { getDb } from './db.js';
-import { logger } from './logger.js';
+import { applyLogLevel, isLogLevel, logger } from './logger.js';
 
 const cache = new Map<string, unknown>();
 
@@ -17,7 +17,7 @@ function persist(key: string, value: unknown, updatedAt: number): void {
  * Muat settings dari SQLite. Key yang belum ada diisi dari default (env hanya
  * dipakai untuk seed pertama), knowledge diisi template saat masih kosong.
  */
-export function initSettings(defaultModel = ''): void {
+export function initSettings(defaultModel = '', defaultLogLevel = ''): void {
   const db = getDb();
   const rows = db.prepare('SELECT key, value FROM settings').all() as Array<{ key: string; value: string }>;
   const stored = new Map<string, unknown>();
@@ -29,13 +29,19 @@ export function initSettings(defaultModel = ''): void {
     }
   }
 
+  // LOG_LEVEL dari env hanya seed awal; setelah tersimpan, web yang menang.
+  if (!stored.has('log_level') && isLogLevel(defaultLogLevel)) {
+    stored.set('log_level', defaultLogLevel);
+  }
+
   cache.clear();
   const now = Date.now();
   const defaults = DEFAULT_SETTINGS as unknown as Record<string, unknown>;
   for (const [key, value] of Object.entries(defaults)) {
     if (!stored.has(key)) {
       cache.set(key, value);
-      persist(key, value, now);
+      // `undefined` tidak bisa di-bind ke SQLite; cukup jadi nilai cache default.
+      if (value !== undefined) persist(key, value, now);
     } else {
       cache.set(key, stored.get(key));
     }
@@ -57,6 +63,8 @@ export function initSettings(defaultModel = ''): void {
     cache.set('model', defaultModel);
     persist('model', defaultModel, now);
   }
+
+  applyLogLevel(cache.get('log_level'));
 }
 
 export function isKnownSettingKey(key: string): key is keyof Settings {
@@ -100,6 +108,9 @@ export function updateSettings(patch: Partial<Settings>): void {
   }
   for (const [key, value] of entries) {
     cache.set(key, value);
+  }
+  if (entries.some(([key]) => key === 'log_level')) {
+    applyLogLevel(cache.get('log_level'));
   }
 }
 

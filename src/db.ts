@@ -52,6 +52,43 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts);
   `,
+  `
+  CREATE TABLE IF NOT EXISTS providers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    base_url TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    priority INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS provider_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider_id INTEGER NOT NULL,
+    label TEXT NOT NULL,
+    key_encrypted TEXT NOT NULL,
+    key_last4 TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    cooldown_until INTEGER NOT NULL DEFAULT 0,
+    fail_count INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY(provider_id) REFERENCES providers(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_provider_keys_provider ON provider_keys(provider_id);
+  `,
+  `
+  CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts INTEGER NOT NULL,
+    key_id INTEGER NOT NULL,
+    success INTEGER NOT NULL,
+    ip TEXT NOT NULL,
+    FOREIGN KEY(key_id) REFERENCES provider_keys(id) ON DELETE CASCADE
+  );
+  `,
+  `
+  ALTER TABLE audit_log ADD COLUMN result TEXT NOT NULL DEFAULT '';
+  `,
 ];
 
 export function initDb(file: string): DatabaseSync {
@@ -164,6 +201,35 @@ export function countActiveMutes(now: number): number {
     | { n: number }
     | undefined;
   return Number(row?.n ?? 0);
+}
+
+export interface AuditRow {
+  id: number;
+  ts: number;
+  key_id: number;
+  success: number;
+  ip: string;
+  result: string;
+}
+
+/** Catat percobaan reveal (berhasil/gagal) tanpa isi key. */
+export function insertAudit(entry: {
+  ts: number;
+  keyId: number;
+  success: boolean;
+  ip: string;
+  result: string;
+}): void {
+  getDb()
+    .prepare('INSERT INTO audit_log (ts, key_id, success, ip, result) VALUES (?, ?, ?, ?, ?)')
+    .run(entry.ts, entry.keyId, entry.success ? 1 : 0, entry.ip, entry.result);
+}
+
+export function getRecentAudit(limit = 50): AuditRow[] {
+  const safeLimit = Math.min(200, Math.max(1, Math.floor(limit)));
+  return getDb()
+    .prepare('SELECT id, ts, key_id, success, ip, result FROM audit_log ORDER BY ts DESC, id DESC LIMIT ?')
+    .all(safeLimit) as unknown as AuditRow[];
 }
 
 

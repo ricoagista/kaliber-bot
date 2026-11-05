@@ -19,7 +19,7 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 import type { WaControl, WaSnapshot } from './api.js';
 import { handleMessage } from './pipeline.js';
-import { logger, maskPhone } from './logger.js';
+import { logger } from './logger.js';
 
 const MEDIA_TYPES = new Set([
   'imageMessage',
@@ -278,7 +278,7 @@ export class WaBot implements WaControl {
       this.reconnectAttempt = 0;
       this.lastError = null;
       const me = this.creds?.me;
-      this.me = me?.phoneNumber ? maskPhone(me.phoneNumber) : me?.id ? maskPhone(me.id.split('@')[0] ?? '') : null;
+      this.me = me?.phoneNumber ? me.phoneNumber : me?.id ? me.id.split('@')[0] ?? null : null;
       logger.warn({ me: this.me }, 'WhatsApp terhubung');
       return;
     }
@@ -388,7 +388,7 @@ export class WaBot implements WaControl {
       await sleep(1000 + Math.floor(Math.random() * 2000));
       await sock.sendMessage(chatId, { text: result.reply }, isGroup ? { quoted: msg } : undefined);
     } catch (err) {
-      logger.error({ err, chat: maskPhone(senderId) }, 'gagal mengirim balasan WA');
+      logger.error({ err, chat: senderId }, 'gagal mengirim balasan WA');
     }
   }
 }

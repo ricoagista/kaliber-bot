@@ -2,12 +2,12 @@ import { loadEnv } from './config.js';
 import { getDb, insertLog } from './db.js';
 import { allowNonTextNotice, checkGuard, digitsOf, normalizeText } from './guard.js';
 import { callLlm } from './llm.js';
-import { maskChatId } from './logger.js';
 import { addMessage, getHistory } from './memory.js';
 import { buildMessages, renderSystemPrompt } from './prompt.js';
 import { defaultQueue } from './queue.js';
 import { sanitizeOutput } from './sanitize.js';
 import { getSettings } from './settings.js';
+import { createLlmContext, type LlmContext } from './providers.js';
 
 const runtimeEnv = loadEnv();
 const NON_TEXT_REPLY = 'Aku cuma bisa membaca teks ya 🙏';
@@ -83,7 +83,7 @@ export async function handleMessage(input: IncomingMessage): Promise<PipelineRes
       try {
         insertLog({
           ts: now,
-          chatId: maskChatId(input.chatId),
+          chatId: input.chatId,
           message: (input.text ?? '').slice(0, 500),
           reply: reply === null ? null : reply.slice(0, 1500),
           status,
@@ -185,6 +185,7 @@ export async function handleMessage(input: IncomingMessage): Promise<PipelineRes
 
     let llm;
     try {
+      const llmContext = createLlmContext();
       llm = await callLlm(messages, {
         routerUrl: runtimeEnv.routerUrl,
         routerKey: runtimeEnv.routerKey,
@@ -193,6 +194,7 @@ export async function handleMessage(input: IncomingMessage): Promise<PipelineRes
         temperature: settings.temperature,
         maxTokens: settings.max_tokens,
         fallbackText: settings.fallback_text,
+        llmContext,
       });
     } catch {
       llm = {
