@@ -143,8 +143,11 @@ export async function handleMessage(input: IncomingMessage): Promise<PipelineRes
     if (prefix && lower.startsWith(prefix)) {
       triggered = true;
       text = text.slice(prefix.length).trim();
-    } else if (/^!(info|help)\b/i.test(lower)) {
+    } else if (/^!(info|help)$/i.test(lower)) {
       triggered = true;
+    }
+    if (input.mentioned) {
+      text = text.replace(/@\d{5,20}\b/g, ' ').replace(/\s+/g, ' ').trim();
     }
     if (!triggered || text === '') return finish('ignored', null);
   }
@@ -180,8 +183,6 @@ export async function handleMessage(input: IncomingMessage): Promise<PipelineRes
       settings,
       now: new Date(now),
     });
-
-    addMessage(input.senderId, 'user', guard.normalized, now);
 
     let llm;
     try {
@@ -227,7 +228,10 @@ export async function handleMessage(input: IncomingMessage): Promise<PipelineRes
       if (sanitized.truncated) flags.push('truncated');
     }
 
-    if (status === 'ok') addMessage(input.senderId, 'assistant', reply, now);
+    if (status === 'ok') {
+      addMessage(input.senderId, 'user', guard.normalized, now);
+      addMessage(input.senderId, 'assistant', reply, now);
+    }
     return finish(status, reply, llm.model);
   });
 }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test, { beforeEach } from 'node:test';
 import { handleMessage } from '../src/pipeline.js';
 import { resetGuardState } from '../src/guard.js';
+import { getHistory } from '../src/memory.js';
 import { getSettings, updateSettings } from '../src/settings.js';
 import { freshDb } from './helpers.js';
 
@@ -134,9 +135,32 @@ test('grup butuh mention atau prefix trigger', async () => {
     chatId: group,
     senderId: SENDER,
     isGroup: true,
-    text: '!info',
+    text: '@628999888777 !info',
     mentioned: true,
     now: NOW + 30_000,
   });
   assert.equal(mentioned.meta.status, 'ok');
+  assert.equal(mentioned.reply, getSettings().info_text);
+
+  // !info diikuti teks bebas tanpa prefix/mention tidak boleh memicu LLM di grup
+  const fakeStatic = await handleMessage({
+    chatId: group,
+    senderId: SENDER,
+    isGroup: true,
+    text: '!info tambahan bebas',
+    now: NOW + 60_000,
+  });
+  assert.equal(fakeStatic.meta.status, 'ignored');
+});
+
+test('kegagalan LLM tidak menyimpan giliran user yatim ke riwayat', async () => {
+  updateSettings({ model: '' }); // memaksa callLlm gagal (model_not_configured)
+  const res = await handleMessage({
+    chatId: SENDER,
+    senderId: SENDER,
+    text: 'halo apa kabar',
+    now: NOW,
+  });
+  assert.equal(res.meta.status, 'error');
+  assert.equal(getHistory(SENDER, 4, NOW + 1000).length, 0);
 });

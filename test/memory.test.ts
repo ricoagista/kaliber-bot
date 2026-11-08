@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test, { beforeEach } from 'node:test';
+import { getDb, insertLog, pruneStorage } from '../src/db.js';
 import { addMessage, clearHistory, getHistory, HISTORY_TTL_MS } from '../src/memory.js';
 import { freshDb } from './helpers.js';
 
@@ -42,4 +43,27 @@ test('clearHistory menghapus riwayat chat', () => {
   addMessage('chat-4', 'user', 'halo');
   clearHistory('chat-4');
   assert.deepEqual(getHistory('chat-4', 4), []);
+});
+
+test('pruneStorage membatasi baris maksimal 2000 dan menghapus riwayat > 6 jam', () => {
+  const base = 1_700_000_000_000;
+  addMessage('chat-old', 'user', 'kedaluwarsa', base - HISTORY_TTL_MS - 5000);
+  for (let i = 0; i < 2100; i++) {
+    insertLog({
+      ts: base + i,
+      chatId: 'chat-5',
+      message: `m-${i}`,
+      reply: 'r',
+      status: 'ok',
+      latencyMs: 1,
+      model: null,
+    });
+  }
+  pruneStorage(base + 3000);
+  const logCount = (getDb().prepare('SELECT COUNT(*) AS n FROM logs').get() as { n: number }).n;
+  const oldMsgCount = (
+    getDb().prepare('SELECT COUNT(*) AS n FROM messages WHERE chat_id = ?').get('chat-old') as { n: number }
+  ).n;
+  assert.equal(logCount, 2000);
+  assert.equal(oldMsgCount, 0);
 });

@@ -89,6 +89,12 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE audit_log ADD COLUMN result TEXT NOT NULL DEFAULT '';
   `,
+  `
+  UPDATE provider_keys SET key_last4 = substr(key_last4, -4) WHERE length(key_last4) > 4;
+  `,
+  `
+  CREATE INDEX IF NOT EXISTS idx_audit_log_ts ON audit_log(ts);
+  `,
 ];
 
 export function initDb(file: string): DatabaseSync {
@@ -123,6 +129,8 @@ function migrate(db: DatabaseSync): void {
       throw err;
     }
   }
+  // Aktifkan foreign key constraints setelah migrasi
+  db.exec('PRAGMA foreign_keys = ON');
 }
 
 export function getDb(): DatabaseSync {
@@ -236,15 +244,23 @@ export function getRecentAudit(limit = 50): AuditRow[] {
 /** Hapus data lama agar storage STB tidak membengkak. */
 export function pruneStorage(now: number = Date.now()): void {
   const db = getDb();
+  const sixHours = 6 * 60 * 60 * 1000;
   const day = 24 * 60 * 60 * 1000;
-  db.prepare('DELETE FROM messages WHERE ts < ?').run(now - 7 * day);
+  const ninetyDays = 90 * 24 * 60 * 60 * 1000;
+  db.prepare('DELETE FROM messages WHERE ts < ?').run(now - sixHours);
   db.prepare('DELETE FROM logs WHERE ts < ?').run(now - 7 * day);
   db.prepare('DELETE FROM seen_messages WHERE ts < ?').run(now - day);
   db.prepare('DELETE FROM strikes WHERE ts < ?').run(now - day);
   db.prepare('DELETE FROM mutes WHERE until < ?').run(now);
-  // Batasi jumlah baris: sisakan 2000 terbaru.
+  // Hapus audit_log lebih tua dari 90 hari
+  db.prepare('DELETE FROM audit_log WHERE ts < ?').run(now - ninetyDays);
+  // Batasi jumlah baris: sisakan 2000 terbaru sesuai spesifikasi
   db.exec(
     'DELETE FROM messages WHERE id NOT IN (SELECT id FROM messages ORDER BY ts DESC LIMIT 2000)',
   );
   db.exec('DELETE FROM logs WHERE id NOT IN (SELECT id FROM logs ORDER BY ts DESC LIMIT 2000)');
+  db.exec(
+    'DELETE FROM seen_messages WHERE id NOT IN (SELECT id FROM seen_messages ORDER BY ts DESC LIMIT 2000)',
+  );
+  db.exec('DELETE FROM audit_log WHERE id NOT IN (SELECT id FROM audit_log ORDER BY ts DESC LIMIT 2000)');
 }

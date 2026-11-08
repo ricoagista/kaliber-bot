@@ -10,12 +10,12 @@ import makeWASocket, {
   isJidStatusBroadcast,
   jidNormalizedUser,
   makeCacheableSignalKeyStore,
+  proto,
   useMultiFileAuthState,
   type AuthenticationCreds,
   type ConnectionState,
   type WAMessage,
   type WASocket,
-  type proto,
 } from '@whiskeysockets/baileys';
 import type { WaControl, WaSnapshot } from './api.js';
 import { handleMessage } from './pipeline.js';
@@ -212,10 +212,11 @@ export class WaBot implements WaControl {
         },
         logger,
         browser: Browsers.ubuntu('Chrome'),
-        printQRInTerminal: false,
         markOnlineOnConnect: false,
         syncFullHistory: false,
-        shouldSyncHistoryMessage: () => false,
+        shouldSyncHistoryMessage: ({ syncType }) =>
+          syncType !== proto.HistorySync.HistorySyncType.FULL &&
+          syncType !== proto.HistorySync.HistorySyncType.RECENT,
         generateHighQualityLinkPreview: false,
       });
       this.sock = sock;
