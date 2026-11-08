@@ -21,11 +21,14 @@ import {
   insertAudit,
 } from './db.js';
 import { invalidPatterns } from './guard.js';
-import { pingLlm } from './llm.js';
+import { pingLlm, probeProvider } from './llm.js';
 import { isLogLevel, logger } from './logger.js';
 import { handleMessage } from './pipeline.js';
 import { getSetting, getSettings, isKnownSettingKey, updateSettings } from './settings.js';
 import {
+  MAX_PROVIDERS,
+  MAX_KEYS_PER_PROVIDER,
+  LimitError,
   listProviders,
   getProvider,
   getKey,
@@ -34,10 +37,12 @@ import {
   deleteProvider,
   listKeys,
   addKey,
+  recordKeyProbe,
   deleteKey,
   toggleKey,
   toggleProvider,
   createLlmContext,
+  buildModelPlan,
   updateKey,
   type ProviderKeyRow,
   type ProviderRow,
@@ -81,12 +86,14 @@ const STRING_LIMITS: Record<string, number> = {
   help_text: 2_000,
   knowledge: 50_000,
   model: 200,
+  llm_strategy: 20,
   trigger_prefix: 32,
   log_level: 10,
 };
 
 const PROVIDER_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 const PROVIDER_BASE_URL_RE = /^https?:\/\//;
+const CONTROL_CHAR_RE = /[\u0000-\u001F\u007F]/;
 
 const BOOLEAN_KEYS = new Set<string>([
   'bot_enabled',
@@ -113,6 +120,14 @@ function validateProviderName(name: string): boolean {
 
 function validateProviderBaseUrl(baseUrl: string): boolean {
   return PROVIDER_BASE_URL_RE.test(baseUrl);
+}
+
+function validateProviderModel(raw: unknown): { ok: true; model: string } | { ok: false; error: string } {
+  if (typeof raw !== 'string') return { ok: false, error: 'model harus teks' };
+  const model = raw.trim();
+  if (model.length > 120) return { ok: false, error: 'model maksimal 120 karakter' };
+  if (CONTROL_CHAR_RE.test(model)) return { ok: false, error: 'model tidak boleh memuat karakter kontrol' };
+  return { ok: true, model };
 }
 
 const LIST_LIMITS: Record<string, { maxItems: number; maxLen: number }> = {
@@ -164,6 +179,9 @@ export function validatePatch(input: unknown): ValidationResult {
       if (key === 'log_level' && !isLogLevel(value)) {
         return { ok: false, error: 'log_level harus salah satu: trace, debug, info, warn, error, fatal' };
       }
+      if (key === 'llm_strategy' && value !== 'manual' && value !== 'round_robin' && value !== 'priority') {
+        return { ok: false, error: 'llm_strategy harus salah satu: manual, round_robin, priority' };
+      }
       patch[key] = value;
       continue;
     }
@@ -198,6 +216,25 @@ const MAX_FAILURES = 5;
 const revealFailures = new Map<string, number[]>();
 const REVEAL_FAILURE_WINDOW_MS = 60_000;
 const MAX_REVEAL_FAILURES = 5;
+
+// Rate limit global untuk endpoint tes provider/key (maks 20 per menit)
+const probeBuckets = new Map<string, number[]>();
+const PROBE_WINDOW_MS = 60_000;
+const MAX_PROBE_PER_MIN = 20;
+
+function allowProbeRequest(now: number): boolean {
+  pruneFailureMap(probeBuckets, now, PROBE_WINDOW_MS);
+  const key = 'global';
+  const list = (probeBuckets.get(key) ?? []).filter((ts) => now - ts < PROBE_WINDOW_MS);
+  if (list.length >= MAX_PROBE_PER_MIN) {
+    probeBuckets.set(key, list);
+    return false;
+  }
+  list.push(now);
+  probeBuckets.set(key, list);
+  if (probeBuckets.size > 5000) probeBuckets.delete(probeBuckets.keys().next().value as string);
+  return true;
+}
 
 function clientIp(c: Parameters<typeof getConnInfo>[0], trustProxy = env.trustProxy): string {
   if (trustProxy) {
@@ -332,6 +369,7 @@ async function fetchProviderModels(provider: ProviderWithKeys): Promise<Provider
       const response = await fetch(url, {
         method: 'GET',
         headers,
+        redirect: 'manual',
         signal: AbortSignal.timeout(MODEL_FETCH_TIMEOUT_MS),
       });
       const text = await response.text().catch(() => '');
@@ -353,12 +391,12 @@ async function fetchProviderModels(provider: ProviderWithKeys): Promise<Provider
       if (response.status !== 404) {
         return { providerId: provider.id, provider: provider.name, models, error: `HTTP ${response.status}` };
       }
-    } catch (err) {
+    } catch {
       return {
         providerId: provider.id,
         provider: provider.name,
         models: [],
-        error: err instanceof Error ? err.message : 'gagal memuat model',
+        error: 'Provider tidak terjangkau (timeout/jaringan).',
       };
     }
   }
@@ -470,7 +508,7 @@ export function createApi(deps: ApiDeps): Hono {
       blockedToday: countLogsSince(startOfDay.getTime(), ['blocked', 'injection', 'ratelimit']),
       strikes: countActiveStrikes(now - settings.strike_window_min * 60_000),
       mutes: countActiveMutes(now),
-      model: settings.model,
+      model: buildModelPlan(settings, { advance: false }).model || settings.model,
       routerUrl: env.routerUrl,
     });
   });
@@ -544,9 +582,10 @@ export function createApi(deps: ApiDeps): Hono {
 
   app.post('/api/llm/ping', async (c) => {
     const settings = getSettings();
+    const plan = buildModelPlan(settings, { advance: false });
     const llmContext = createLlmContext();
     const result = await pingLlm({
-      model: settings.model,
+      model: plan.model,
       temperature: settings.temperature,
       maxTokens: 5,
       llmContext,
@@ -582,7 +621,12 @@ export function createApi(deps: ApiDeps): Hono {
       ...provider,
       keys: provider.keys.map(publicKey),
     }));
-    return c.json({ providers });
+    return c.json({
+      providers,
+      maxProviders: MAX_PROVIDERS,
+      maxKeysPerProvider: MAX_KEYS_PER_PROVIDER,
+      serverNow: Date.now(),
+    });
   });
 
   app.post('/api/providers', async (c) => {
@@ -590,7 +634,13 @@ export function createApi(deps: ApiDeps): Hono {
     if (!isRecord(body)) return c.json({ error: 'body JSON tidak valid' }, 400);
     const name = typeof body.name === 'string' ? body.name.trim() : '';
     const baseUrl = typeof body.baseUrl === 'string' ? body.baseUrl.trim() : '';
-    const priority = typeof body.priority === 'number' ? body.priority : 0;
+    const priority = typeof body.priority === 'number' && Number.isFinite(body.priority) ? body.priority : 0;
+    let model = '';
+    if (body.model !== undefined) {
+      const checked = validateProviderModel(body.model);
+      if (!checked.ok) return c.json({ error: checked.error }, 400);
+      model = checked.model;
+    }
     if (!name) return c.json({ error: 'nama provider wajib diisi' }, 400);
     if (!baseUrl) return c.json({ error: 'base URL wajib diisi' }, 400);
     if (!validateProviderName(name)) {
@@ -600,12 +650,17 @@ export function createApi(deps: ApiDeps): Hono {
       return c.json({ error: 'base URL harus http:// atau https://' }, 400);
     }
     try {
-      const provider = createProvider(name, baseUrl, priority);
+      const provider = createProvider(name, baseUrl, priority, model);
       logger.warn({ id: provider.id, name: provider.name }, 'provider ditambahkan');
       return c.json({ ok: true, provider }, 201);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'gagal menambahkan provider';
-      return c.json({ error: message }, 400);
+      if (err instanceof LimitError) {
+        return c.json({ error: err.message }, 409);
+      }
+      if (err instanceof Error && /UNIQUE/i.test(err.message)) {
+        return c.json({ error: 'Nama provider sudah dipakai.' }, 409);
+      }
+      return c.json({ error: 'Gagal menambahkan provider.' }, 400);
     }
   });
 
@@ -614,7 +669,7 @@ export function createApi(deps: ApiDeps): Hono {
     if (!Number.isFinite(id)) return c.json({ error: 'ID tidak valid' }, 400);
     const body = await readJson(c);
     if (!isRecord(body)) return c.json({ error: 'body JSON tidak valid' }, 400);
-    const patch: Partial<{ name: string; baseUrl: string; enabled: boolean; priority: number }> = {};
+    const patch: Partial<{ name: string; baseUrl: string; model: string; enabled: boolean; priority: number }> = {};
     if (body.name !== undefined) {
       const name = typeof body.name === 'string' ? body.name.trim() : '';
       if (!name) return c.json({ error: 'nama provider wajib diisi' }, 400);
@@ -631,11 +686,16 @@ export function createApi(deps: ApiDeps): Hono {
       }
       patch.baseUrl = baseUrl;
     }
+    if (body.model !== undefined) {
+      const checked = validateProviderModel(body.model);
+      if (!checked.ok) return c.json({ error: checked.error }, 400);
+      patch.model = checked.model;
+    }
     if (body.enabled !== undefined) {
       patch.enabled = typeof body.enabled === 'boolean' ? body.enabled : true;
     }
     if (body.priority !== undefined) {
-      patch.priority = typeof body.priority === 'number' ? body.priority : 0;
+      patch.priority = typeof body.priority === 'number' && Number.isFinite(body.priority) ? body.priority : 0;
     }
     if (Object.keys(patch).length === 0) {
       return c.json({ error: 'tidak ada field yang diubah' }, 400);
@@ -663,8 +723,10 @@ export function createApi(deps: ApiDeps): Hono {
       logger.warn({ id }, 'provider diperbarui');
       return c.json({ ok: true, provider });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'gagal memperbarui provider';
-      return c.json({ error: message }, 400);
+      if (err instanceof Error && /UNIQUE/i.test(err.message)) {
+        return c.json({ error: 'Nama provider sudah dipakai.' }, 409);
+      }
+      return c.json({ error: 'Gagal memperbarui provider.' }, 400);
     }
   });
 
@@ -688,21 +750,63 @@ export function createApi(deps: ApiDeps): Hono {
     return c.json({ ok: true, enabled });
   });
 
-  // Tes koneksi memakai key aktif yang tersimpan (tidak mengirim key ke klien).
+  // Tes koneksi memakai key aktif pertama (atau tanpa key) dan provider.model.
   app.post('/api/providers/:id/test', async (c) => {
+    if (!allowProbeRequest(Date.now())) {
+      return c.json({ error: 'Terlalu banyak tes koneksi, coba lagi sebentar.' }, 429);
+    }
     const id = Number.parseInt(c.req.param('id'), 10);
     if (!Number.isFinite(id)) return c.json({ error: 'ID tidak valid' }, 400);
     const provider = getProvider(id);
     if (!provider) return c.json({ error: 'provider tidak ditemukan' }, 404);
 
-    const started = Date.now();
-    const result = await fetchProviderModels(provider);
+    const activeKey = provider.keys.find((item) => item.enabled);
+    if (provider.keys.length > 0 && !activeKey) {
+      return c.json({
+        ok: false,
+        status: 'error',
+        provider: provider.name,
+        models: [],
+        latencyMs: 0,
+        error: 'Tidak ada key aktif pada provider ini.',
+        note: 'Tidak ada key aktif pada provider ini.',
+      });
+    }
+
+    let apiKey = '';
+    if (activeKey) {
+      try {
+        apiKey = decryptKeyCached(activeKey.id, activeKey.keyEncrypted);
+      } catch {
+        recordKeyProbe(activeKey.id, 'error');
+        return c.json({
+          ok: false,
+          status: 'error',
+          provider: provider.name,
+          models: [],
+          latencyMs: 0,
+          error: 'Key tidak bisa didekripsi (SECRET_KEY mungkin berubah).',
+          note: 'Key tidak bisa didekripsi (SECRET_KEY mungkin berubah).',
+        });
+      }
+    }
+
+    const probe = await probeProvider({
+      baseUrl: provider.baseUrl,
+      apiKey,
+      model: provider.model || undefined,
+    });
+    if (activeKey) {
+      recordKeyProbe(activeKey.id, probe.status);
+    }
+
     return c.json({
-      ok: !result.error,
-      provider: result.provider,
-      models: result.models,
-      latencyMs: Date.now() - started,
-      ...(result.error ? { error: result.error } : {}),
+      ...probe,
+      ok: probe.ok,
+      provider: provider.name,
+      models: probe.models,
+      latencyMs: probe.latencyMs,
+      ...(probe.ok ? {} : { error: probe.note || (probe.httpStatus ? `HTTP ${probe.httpStatus}` : 'gagal') }),
     });
   });
 
@@ -738,9 +842,54 @@ export function createApi(deps: ApiDeps): Hono {
       logger.warn({ keyId: key.id, providerId: provider.id }, 'key ditambahkan');
       return c.json({ ok: true, key: publicKey(key) }, 201);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'gagal menambahkan key';
-      return c.json({ error: message }, 400);
+      if (err instanceof LimitError) {
+        return c.json({ error: err.message }, 409);
+      }
+      return c.json({ error: 'Gagal menambahkan key.' }, 400);
     }
+  });
+
+  app.post('/api/providers/:providerId/keys/:keyId/test', async (c) => {
+    if (!allowProbeRequest(Date.now())) {
+      return c.json({ error: 'Terlalu banyak tes koneksi, coba lagi sebentar.' }, 429);
+    }
+    const providerId = Number.parseInt(c.req.param('providerId'), 10);
+    const keyId = Number.parseInt(c.req.param('keyId'), 10);
+    if (!Number.isFinite(providerId) || !Number.isFinite(keyId)) return c.json({ error: 'ID tidak valid' }, 400);
+    const provider = getProvider(providerId);
+    if (!provider) return c.json({ error: 'provider tidak ditemukan' }, 404);
+    const existing = getKey(keyId);
+    if (!existing || existing.providerId !== providerId) return c.json({ error: 'key tidak ditemukan' }, 404);
+
+    const body = await readJson(c);
+    let requestedModel = '';
+    if (isRecord(body) && body.model !== undefined) {
+      const checked = validateProviderModel(body.model);
+      if (!checked.ok) return c.json({ error: checked.error }, 400);
+      requestedModel = checked.model;
+    }
+
+    let apiKey: string;
+    try {
+      apiKey = decryptKeyCached(existing.id, existing.keyEncrypted);
+    } catch {
+      recordKeyProbe(existing.id, 'error');
+      return c.json({
+        ok: false,
+        status: 'error',
+        latencyMs: 0,
+        models: [],
+        note: 'Key tidak bisa didekripsi (SECRET_KEY mungkin berubah).',
+      });
+    }
+
+    const probe = await probeProvider({
+      baseUrl: provider.baseUrl,
+      apiKey,
+      model: requestedModel || provider.model || undefined,
+    });
+    recordKeyProbe(existing.id, probe.status);
+    return c.json(probe);
   });
 
   app.put('/api/providers/:providerId/keys/:keyId', async (c) => {
@@ -794,39 +943,56 @@ export function createApi(deps: ApiDeps): Hono {
   });
 
   app.post('/api/llm/test', async (c) => {
+    if (!allowProbeRequest(Date.now())) {
+      return c.json({ error: 'Terlalu banyak tes koneksi, coba lagi sebentar.' }, 429);
+    }
     const body = await readJson(c);
     if (!isRecord(body)) return c.json({ error: 'body JSON tidak valid' }, 400);
     const baseUrl = typeof body.baseUrl === 'string' ? body.baseUrl.trim() : '';
-    const apiKey = typeof body.apiKey === 'string' ? body.apiKey : '';
     if (!baseUrl) return c.json({ error: 'base URL wajib diisi' }, 400);
-    if (!validateProviderBaseUrl(baseUrl)) {
-      return c.json({ error: 'base URL harus http:// atau https://' }, 400);
-    }
-    const url = `${baseUrl.replace(/\/+$/, '')}/models`;
-    try {
-      const headers: Record<string, string> = {};
-      if (apiKey) headers.authorization = `Bearer ${apiKey}`;
-      const response = await fetch(url, {
-        method: 'GET',
-        headers,
-        signal: AbortSignal.timeout(15_000),
-      });
-      const ok = response.ok;
-      const text = await response.text().catch(() => '');
-      let models: string[] = [];
-      try {
-        const parsed = JSON.parse(text);
-        if (parsed.data && Array.isArray(parsed.data)) {
-          models = parsed.data.map((m: { id?: unknown }) => (typeof m?.id === 'string' ? m.id : '')).filter(Boolean);
+    let apiKey = typeof body.apiKey === 'string' ? body.apiKey : '';
+    if (!apiKey && typeof body.providerId === 'number' && Number.isFinite(body.providerId)) {
+      const existing = getProvider(body.providerId);
+      if (existing && existing.baseUrl.trim().replace(/\/+$/, '') === baseUrl.trim().replace(/\/+$/, '')) {
+        const activeKey = existing.keys.find((item) => item.enabled);
+        if (activeKey) {
+          try {
+            apiKey = decryptKeyCached(activeKey.id, activeKey.keyEncrypted);
+          } catch {
+            // abaikan; probe akan jalan tanpa key atau gagal auth
+          }
         }
-      } catch {
-        // ignore parse errors
       }
-      if (!ok) return c.json({ ok: false, error: `HTTP ${response.status}`, models });
-      return c.json({ ok: true, models });
-    } catch {
-      return c.json({ ok: false, error: 'gagal tes koneksi ke provider' }, 409);
     }
+    let model = '';
+    if (body.model !== undefined) {
+      const checked = validateProviderModel(body.model);
+      if (!checked.ok) {
+        return c.json({
+          ok: false,
+          status: 'error',
+          latencyMs: 0,
+          models: [],
+          note: checked.error,
+        });
+      }
+      model = checked.model;
+    }
+    if (!validateProviderBaseUrl(baseUrl)) {
+      return c.json({
+        ok: false,
+        status: 'error',
+        latencyMs: 0,
+        models: [],
+        note: 'Base URL harus menggunakan http:// atau https://.',
+      });
+    }
+    const probe = await probeProvider({
+      baseUrl,
+      apiKey,
+      model: model || undefined,
+    });
+    return c.json(probe);
   });
 
   // ---- Password reveal (verifikasi ulang untuk lihat key asli) ----

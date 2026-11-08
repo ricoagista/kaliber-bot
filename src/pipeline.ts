@@ -7,7 +7,7 @@ import { buildMessages, renderSystemPrompt } from './prompt.js';
 import { defaultQueue } from './queue.js';
 import { sanitizeOutput } from './sanitize.js';
 import { getSettings } from './settings.js';
-import { createLlmContext, type LlmContext } from './providers.js';
+import { buildModelPlan, createLlmContext, type LlmContext } from './providers.js';
 
 const runtimeEnv = loadEnv();
 const NON_TEXT_REPLY = 'Aku cuma bisa membaca teks ya 🙏';
@@ -187,11 +187,12 @@ export async function handleMessage(input: IncomingMessage): Promise<PipelineRes
     let llm;
     try {
       const llmContext = createLlmContext();
+      const plan = buildModelPlan(settings);
       llm = await callLlm(messages, {
         routerUrl: runtimeEnv.routerUrl,
         routerKey: runtimeEnv.routerKey,
-        model: settings.model,
-        fallbackModels: settings.fallback_models,
+        model: plan.model,
+        fallbackModels: plan.fallbackModels,
         temperature: settings.temperature,
         maxTokens: settings.max_tokens,
         fallbackText: settings.fallback_text,

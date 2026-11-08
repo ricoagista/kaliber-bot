@@ -32,11 +32,14 @@ src/index.ts      bootstrap (DB, settings, WA, HTTP)
 src/config.ts     env, default settings, template prompt
 src/db.ts         node:sqlite + migrasi + prune
 src/settings.ts   get/set settings + cache
+src/crypto.ts     enkripsi AES-256-GCM key + verifikasi REVEAL_PASSWORD
+src/providers.ts  CRUD provider/key, rotasi key/provider, buildModelPlan
+src/endpoint.ts   normalisasi Base URL + kandidat endpoint OpenAI
 src/wa.ts         Baileys: QR/pairing, reconnect, kirim/terima
 src/pipeline.ts   alur pesan -> balasan (TIDAK boleh menyentuh Baileys)
 src/guard.ts      rate limit, injeksi, strike/mute
 src/prompt.ts     susun system prompt + messages
-src/llm.ts        klien LLM, timeout/retry/fallback
+src/llm.ts        klien LLM, timeout/retry/fallback, probeProvider
 src/sanitize.ts   filter output + deteksi kebocoran
 src/memory.ts     riwayat per nomor
 src/queue.ts      antrean serial per nomor, konkurensi global 2
@@ -44,6 +47,16 @@ src/api.ts        route /api/* + auth + validasi
 src/logger.ts     pino
 public/index.html web admin
 ```
+
+## Provider & API key
+
+- Maksimal 5 provider (`MAX_PROVIDERS`), maksimal 20 key per provider (`MAX_KEYS_PER_PROVIDER`). Semua dikelola dari tab Provider di web admin; `.env` tidak lagi wajib memuat URL/key provider (cukup `ADMIN_TOKEN` + `SECRET_KEY`).
+- Tiap provider punya `model` default. Mode penggunaan diatur lewat setting `llm_strategy`:
+  - `manual` (default): memakai `settings.model` + `settings.fallback_models`.
+  - `round_robin`: bergantian antar provider aktif yang punya `model` dan minimal satu key sehat; provider lain jadi fallback.
+  - `priority`: urut `priority ASC, id ASC`; pindah ke berikutnya saat gagal.
+- Rotasi antar key di dalam satu provider tetap berjalan (round-robin + cooldown saat 401/403/429/5xx).
+- Tes key memakai `probeProvider` (GET `/models` + POST `/chat/completions` singkat) lewat server; browser tidak pernah memanggil provider langsung (CSP `connect-src 'self'`). Hasil disimpan di `provider_keys.last_status` dan `last_checked_at`.
 
 ## Aturan teknis
 
@@ -72,7 +85,7 @@ public/index.html web admin
 
 ## Desain UI
 
-Tampilan web admin mengikuti `design.md` di root repo. Semua warna, font, spacing, dan radius didefinisikan sebagai CSS variable di `:root` pada `public/index.html`, jangan hardcode nilai di komponen.
+Tampilan web admin mengikuti `DESIGN.md` di root repo. Semua warna, font, spacing, dan radius didefinisikan sebagai CSS variable di `:root` pada `public/index.html`, jangan hardcode nilai di komponen.
 
 ## Git
 

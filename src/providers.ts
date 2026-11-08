@@ -1,3 +1,4 @@
+import type { Settings } from './config.js';
 import { getDb } from './db.js';
 import {
   decryptKey,
@@ -10,10 +11,24 @@ import {
 import { logger } from './logger.js';
 import { getSettings, updateSettings } from './settings.js';
 
+export const MAX_PROVIDERS = 5;
+export const MAX_KEYS_PER_PROVIDER = 20;
+
+export type KeyStatus = '' | 'valid' | 'invalid' | 'rate_limited' | 'unreachable' | 'error';
+export type LlmStrategy = 'manual' | 'round_robin' | 'priority';
+
+export class LimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LimitError';
+  }
+}
+
 export interface ProviderRow {
   id: number;
   name: string;
   baseUrl: string;
+  model: string;
   enabled: boolean;
   priority: number;
   createdAt: number;
@@ -28,6 +43,8 @@ export interface ProviderKeyRow {
   enabled: boolean;
   cooldownUntil: number;
   failCount: number;
+  lastStatus: KeyStatus;
+  lastCheckedAt: number;
   createdAt: number;
 }
 
@@ -39,6 +56,7 @@ interface RawProviderRow {
   id: number;
   name: string;
   base_url: string;
+  model?: string;
   enabled: number;
   priority: number;
   created_at: number;
@@ -53,6 +71,8 @@ interface RawProviderKeyRow {
   enabled: number;
   cooldown_until: number;
   fail_count: number;
+  last_status?: string;
+  last_checked_at?: number;
   created_at: number;
 }
 
@@ -61,6 +81,7 @@ function mapProvider(row: RawProviderRow): ProviderRow {
     id: row.id,
     name: row.name,
     baseUrl: row.base_url,
+    model: row.model ?? '',
     enabled: Boolean(row.enabled),
     priority: row.priority,
     createdAt: row.created_at,
@@ -77,6 +98,8 @@ function mapKey(row: RawProviderKeyRow): ProviderKeyRow {
     enabled: Boolean(row.enabled),
     cooldownUntil: row.cooldown_until,
     failCount: row.fail_count,
+    lastStatus: (row.last_status ?? '') as KeyStatus,
+    lastCheckedAt: row.last_checked_at ?? 0,
     createdAt: row.created_at,
   };
 }
@@ -115,11 +138,22 @@ export function getProviderByName(name: string): ProviderRow | null {
   return row ? mapProvider(row) : null;
 }
 
-export function createProvider(name: string, baseUrl: string, priority: number): ProviderRow {
+export function createProvider(
+  name: string,
+  baseUrl: string,
+  priority: number,
+  model = '',
+): ProviderRow {
   const db = getDb();
+  const countRow = db.prepare('SELECT COUNT(*) AS n FROM providers').get() as { n: number } | undefined;
+  if (Number(countRow?.n ?? 0) >= MAX_PROVIDERS) {
+    throw new LimitError(`Maksimal ${MAX_PROVIDERS} provider.`);
+  }
   const result = db
-    .prepare('INSERT INTO providers (name, base_url, enabled, priority, created_at) VALUES (?, ?, ?, ?, ?)')
-    .run(name, baseUrl, 1, priority, Date.now());
+    .prepare(
+      'INSERT INTO providers (name, base_url, model, enabled, priority, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    )
+    .run(name, baseUrl, model, 1, priority, Date.now());
   const row = selectProvider(Number(result.lastInsertRowid));
   if (!row) throw new Error('gagal membuat provider');
   return mapProvider(row);
@@ -132,9 +166,12 @@ export function updateProvider(
   const db = getDb();
   const existing = selectProvider(id);
   if (!existing) return null;
-  db.prepare('UPDATE providers SET name = ?, base_url = ?, enabled = ?, priority = ? WHERE id = ?').run(
+  db.prepare(
+    'UPDATE providers SET name = ?, base_url = ?, model = ?, enabled = ?, priority = ? WHERE id = ?',
+  ).run(
     patch.name !== undefined ? patch.name : existing.name,
     patch.baseUrl !== undefined ? patch.baseUrl : existing.base_url,
+    patch.model !== undefined ? patch.model : (existing.model ?? ''),
     patch.enabled === undefined ? existing.enabled : (patch.enabled ? 1 : 0),
     patch.priority !== undefined ? patch.priority : existing.priority,
     id,
@@ -173,6 +210,12 @@ export function addKey(
   keyLast4: string,
 ): ProviderKeyRow | null {
   const db = getDb();
+  const countRow = db
+    .prepare('SELECT COUNT(*) AS n FROM provider_keys WHERE provider_id = ?')
+    .get(providerId) as { n: number } | undefined;
+  if (Number(countRow?.n ?? 0) >= MAX_KEYS_PER_PROVIDER) {
+    throw new LimitError(`Maksimal ${MAX_KEYS_PER_PROVIDER} key per provider.`);
+  }
   const result = db
     .prepare(
       'INSERT INTO provider_keys (provider_id, label, key_encrypted, key_last4, enabled, cooldown_until, fail_count, created_at) VALUES (?, ?, ?, ?, 1, 0, 0, ?)',
@@ -180,6 +223,19 @@ export function addKey(
     .run(providerId, label, keyEncrypted, keyLast4, Date.now());
   const row = selectKey(Number(result.lastInsertRowid));
   return row ? mapKey(row) : null;
+}
+
+export function recordKeyProbe(keyId: number, status: KeyStatus, now: number = Date.now()): void {
+  if (keyId <= 0) return;
+  if (status === 'valid') {
+    getDb()
+      .prepare('UPDATE provider_keys SET last_status = ?, last_checked_at = ?, cooldown_until = 0, fail_count = 0 WHERE id = ?')
+      .run(status, now, keyId);
+    return;
+  }
+  getDb()
+    .prepare('UPDATE provider_keys SET last_status = ?, last_checked_at = ? WHERE id = ?')
+    .run(status, now, keyId);
 }
 
 export function updateKey(
@@ -204,6 +260,14 @@ export function updateKey(
   if (patch.failCount !== undefined) {
     sets.push('fail_count = ?');
     values.push(patch.failCount);
+  }
+  if (patch.lastStatus !== undefined) {
+    sets.push('last_status = ?');
+    values.push(patch.lastStatus);
+  }
+  if (patch.lastCheckedAt !== undefined) {
+    sets.push('last_checked_at = ?');
+    values.push(patch.lastCheckedAt);
   }
   if (sets.length === 0) return selectKey(id) ? mapKey(selectKey(id)!) : null;
   values.push(id);
@@ -241,6 +305,7 @@ export interface ResolvedLlmKey {
   providerId: number;
   keyId: number;
   model: string;
+  keysAvailable: number;
 }
 
 export interface LlmContext {
@@ -250,6 +315,15 @@ export interface LlmContext {
 }
 
 const keyCounters = new Map<number, number>();
+let providerCounter = 0;
+
+function statusFromHttpCode(status: number): KeyStatus {
+  if (status === 401 || status === 403) return 'invalid';
+  if (status === 429) return 'rate_limited';
+  if (status === 0) return 'unreachable';
+  if (status >= 500) return 'error';
+  return 'error';
+}
 
 export function createLlmContext(): LlmContext {
   return {
@@ -257,10 +331,13 @@ export function createLlmContext(): LlmContext {
       const slash = modelName.indexOf('/');
       const requestedProvider = slash >= 0 ? modelName.slice(0, slash) : '';
       const requested = requestedProvider ? getProviderByName(requestedProvider) : null;
-      const namedProvider = requested?.enabled ? requestedProvider : '';
+      // Jika prefix cocok dengan provider yang ada tetapi nonaktif, lewati kandidat ini.
+      if (requested && !requested.enabled) return null;
+
+      const namedProvider = requested ? requestedProvider : '';
       const providerName = namedProvider || (await defaultProviderName());
       const actualModel = namedProvider ? modelName.slice(slash + 1) : modelName;
-      if (!providerName) return null;
+      if (!providerName || !actualModel) return null;
       const rawProvider = getDb()
         .prepare('SELECT * FROM providers WHERE name = ?')
         .get(providerName) as unknown as RawProviderRow | undefined;
@@ -278,6 +355,7 @@ export function createLlmContext(): LlmContext {
           providerId: rawProvider.id,
           keyId: 0,
           model: actualModel,
+          keysAvailable: 1,
         };
       }
       const rawKeys = allKeys.filter((key) => Boolean(key.enabled));
@@ -302,6 +380,7 @@ export function createLlmContext(): LlmContext {
           providerId: rawProvider.id,
           keyId: key.id,
           model: actualModel,
+          keysAvailable: available.length,
         };
       } catch (err) {
         logger.error({ keyId: rawKey.id, err }, 'gagal dekript key, dilewati');
@@ -317,7 +396,10 @@ export function createLlmContext(): LlmContext {
       if (keyId <= 0) return;
       const db = getDb();
       const now = Date.now();
-      db.prepare('UPDATE provider_keys SET fail_count = fail_count + 1 WHERE id = ?').run(keyId);
+      const lastStatus = statusFromHttpCode(status);
+      db.prepare(
+        'UPDATE provider_keys SET fail_count = fail_count + 1, last_status = ?, last_checked_at = ? WHERE id = ?',
+      ).run(lastStatus, now, keyId);
       const key = selectKey(keyId);
       if (!key) return;
       const otherKey = db
@@ -337,12 +419,130 @@ export function createLlmContext(): LlmContext {
     },
     async markKeySucceeded(_providerId: number, keyId: number): Promise<void> {
       if (keyId <= 0) return;
-      getDb().prepare('UPDATE provider_keys SET fail_count = 0, cooldown_until = 0 WHERE id = ?').run(keyId);
+      const now = Date.now();
+      getDb()
+        .prepare(
+          "UPDATE provider_keys SET fail_count = 0, cooldown_until = 0, last_status = 'valid', last_checked_at = ? WHERE id = ?",
+        )
+        .run(now, keyId);
     },
   };
 }
 
+export interface ModelPlan {
+  model: string;
+  fallbackModels: string[];
+  strategy: LlmStrategy;
+}
+
+export function buildModelPlan(settings: Settings, opts?: { advance?: boolean }): ModelPlan {
+  const strategy: LlmStrategy =
+    settings.llm_strategy === 'round_robin' || settings.llm_strategy === 'priority'
+      ? settings.llm_strategy
+      : 'manual';
+
+  if (strategy === 'manual') {
+    return {
+      model: settings.model,
+      fallbackModels: [...(settings.fallback_models ?? [])],
+      strategy: 'manual',
+    };
+  }
+
+  const now = Date.now();
+  const providers = listProviders();
+  const eligible = providers.filter((p) => {
+    if (!p.enabled || !p.model.trim()) return false;
+    if (p.keys.length === 0) return true;
+    return p.keys.some((k) => k.enabled);
+  });
+
+  if (eligible.length === 0) {
+    return {
+      model: settings.model,
+      fallbackModels: [...(settings.fallback_models ?? [])],
+      strategy,
+    };
+  }
+
+  const healthy: ProviderWithKeys[] = [];
+  const unhealthy: ProviderWithKeys[] = [];
+  for (const p of eligible) {
+    const isHealthy = p.keys.length === 0 || p.keys.some((k) => k.enabled && k.cooldownUntil <= now);
+    if (isHealthy) healthy.push(p);
+    else unhealthy.push(p);
+  }
+
+  let ordered: ProviderWithKeys[];
+  if (strategy === 'round_robin') {
+    if (healthy.length > 0) {
+      const start = providerCounter % healthy.length;
+      if (opts?.advance !== false) {
+        providerCounter = (providerCounter + 1) % 1_000_000;
+      }
+      ordered = [...healthy.slice(start), ...healthy.slice(0, start), ...unhealthy];
+    } else {
+      const start = providerCounter % unhealthy.length;
+      if (opts?.advance !== false) {
+        providerCounter = (providerCounter + 1) % 1_000_000;
+      }
+      ordered = [...unhealthy.slice(start), ...unhealthy.slice(0, start)];
+    }
+  } else {
+    ordered = [...healthy, ...unhealthy];
+  }
+
+  const seen = new Set<string>();
+  const candidates: string[] = [];
+  for (const p of ordered) {
+    const candidate = `${p.name}/${p.model.trim()}`;
+    if (!seen.has(candidate)) {
+      seen.add(candidate);
+      candidates.push(candidate);
+    }
+  }
+
+  if (candidates.length === 0) {
+    return {
+      model: settings.model,
+      fallbackModels: [...(settings.fallback_models ?? [])],
+      strategy,
+    };
+  }
+
+  return {
+    model: candidates[0]!,
+    fallbackModels: candidates.slice(1),
+    strategy,
+  };
+}
+
+/**
+ * Sekali saat start: untuk provider yang kolom model-nya masih kosong, isi dari
+ * settings.model atau settings.fallback_models yang berawalan `<nama>/`.
+ */
+export function backfillProviderModels(): void {
+  const settings = getSettings();
+  const sources = [settings.model, ...(settings.fallback_models ?? [])]
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean);
+  if (sources.length === 0) return;
+
+  const providers = listProviders();
+  for (const provider of providers) {
+    if (provider.model.trim() !== '') continue;
+    const prefix = `${provider.name}/`;
+    const match = sources.find((entry) => entry.startsWith(prefix) && entry.slice(prefix.length).trim() !== '');
+    if (match) {
+      const extracted = match.slice(prefix.length).trim().slice(0, 120);
+      updateProvider(provider.id, { model: extracted });
+    }
+  }
+}
+
 export function normalizeModelSettings(): void {
+  const settings = getSettings();
+  if (settings.llm_strategy && settings.llm_strategy !== 'manual') return;
   const providers = listProviders();
   const enabledProviders = providers.filter((provider) => provider.enabled);
   const defaultProvider = enabledProviders[0]?.name;
@@ -354,7 +554,6 @@ export function normalizeModelSettings(): void {
     if (slash > 0 && validNames.has(trimmed.slice(0, slash))) return trimmed;
     return trimmed ? `${defaultProvider}/${trimmed}` : trimmed;
   };
-  const settings = getSettings();
   const model = addPrefix(settings.model);
   const fallbackModels = settings.fallback_models.map(addPrefix);
   if (model !== settings.model || fallbackModels.some((value, index) => value !== settings.fallback_models[index])) {

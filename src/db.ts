@@ -95,6 +95,15 @@ const MIGRATIONS: string[] = [
   `
   CREATE INDEX IF NOT EXISTS idx_audit_log_ts ON audit_log(ts);
   `,
+  `
+  ALTER TABLE providers ADD COLUMN model TEXT NOT NULL DEFAULT '';
+  `,
+  `
+  ALTER TABLE provider_keys ADD COLUMN last_status TEXT NOT NULL DEFAULT '';
+  `,
+  `
+  ALTER TABLE provider_keys ADD COLUMN last_checked_at INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function initDb(file: string): DatabaseSync {

@@ -21,6 +21,7 @@ export interface Settings {
 
   model: string;
   fallback_models: string[];
+  llm_strategy: 'manual' | 'round_robin' | 'priority';
   temperature: number;
   max_tokens: number;
   history_turns: number;
@@ -87,6 +88,7 @@ export const DEFAULT_SETTINGS: Settings = {
 
   model: '',
   fallback_models: [],
+  llm_strategy: 'manual',
   temperature: 0.3,
   max_tokens: 300,
   history_turns: 4,

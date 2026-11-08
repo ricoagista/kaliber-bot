@@ -6,7 +6,13 @@ import { closeDb, initDb, pruneStorage, getDb } from './db.js';
 import { logger } from './logger.js';
 import { initSettings } from './settings.js';
 import { WaBot } from './wa.js';
-import { addKey, createProvider, prepareKeyStore, normalizeModelSettings } from './providers.js';
+import {
+  addKey,
+  backfillProviderModels,
+  createProvider,
+  prepareKeyStore,
+  normalizeModelSettings,
+} from './providers.js';
 import { encryptKey, setRevealPassword, keyLast4 } from './crypto.js';
 
 const startedAt = Date.now();
@@ -34,6 +40,7 @@ function main(): void {
       }
     }
   }
+  backfillProviderModels();
   normalizeModelSettings();
 
   // Migrasi format enkripsi lama + hangatkan cache key sekali saat start.

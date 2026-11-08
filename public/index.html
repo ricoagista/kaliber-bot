@@ -437,6 +437,20 @@
   .charcount.over { color: var(--danger); font-weight: 700; }
 
   /* ---------- providers ---------- */
+  .strategy-box { margin-bottom: var(--s4); padding-bottom: var(--s4); border-bottom: 1px solid var(--border); }
+  .strategy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--s2); margin-top: var(--s2); }
+  .strategy-opt {
+    display: flex; align-items: flex-start; gap: var(--s2);
+    padding: var(--s3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    cursor: pointer;
+  }
+  .strategy-opt input { accent-color: var(--accent); margin-top: var(--s1); }
+  .strategy-opt strong { display: block; font-size: var(--fs-sm); color: var(--text); }
+  .strategy-opt span { display: block; font-size: var(--fs-xs); color: var(--text-muted); margin-top: var(--s1); }
+  .strategy-opt.active { border-color: var(--accent); background: var(--surface-raised); }
   .provider-list { display: flex; flex-direction: column; gap: var(--s4); }
   .provider-card { border: 1px solid var(--border); border-radius: 0; padding: var(--s4); background: var(--bg); }
   .provider-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s3); flex-wrap: wrap; }
@@ -1072,6 +1086,7 @@
       <div class="card">
         <h2>Model &amp; LLM</h2>
         <p class="hint">Daftar model diambil dari provider aktif. Format <code>namaProvider/namaModel</code> dipakai otomatis bila ada lebih dari satu provider.</p>
+        <p class="hint hidden" id="modelStrategyHint">Mode bergantian/prioritas aktif. Model ditentukan per provider di tab Provider.</p>
         <div class="grid cols">
           <label class="field">
             <span class="field-label">Model utama</span>
@@ -1089,7 +1104,7 @@
         </div>
         <div class="field mt-3">
           <span class="field-label">Model fallback (satu per baris, urutan prioritas)</span>
-          <textarea class="input code" data-key="fallback_models" data-type="list" rows="5" spellcheck="false"></textarea>
+          <textarea class="input code" id="fallbackModelsInput" data-key="fallback_models" data-type="list" rows="5" spellcheck="false"></textarea>
         </div>
         <div class="row mt-3">
           <button type="button" class="btn btn-secondary" id="pingBtn">Tes koneksi LLM</button>
@@ -1106,12 +1121,38 @@
       <div class="card">
         <div class="card-head">
           <div>
-            <h2>Provider &amp; API key</h2>
+            <h2 id="providersTitle">Provider &amp; API key</h2>
             <p class="hint">Setiap provider bisa punya beberapa key (round-robin). Key disimpan terenkripsi dan hanya tampil sebagai mask. Password reveal diatur lewat <code>REVEAL_PASSWORD</code> di <code>.env</code> server, bukan dari web.</p>
           </div>
           <div class="row">
             <button type="button" class="btn btn-secondary" id="refreshProviders">Muat ulang</button>
             <button type="button" class="btn btn-primary" id="addProviderBtn">+ Tambah provider</button>
+          </div>
+        </div>
+        <div class="strategy-box">
+          <div class="field-label">Mode penggunaan</div>
+          <div class="strategy-grid" id="strategyGroup" role="radiogroup" aria-label="Mode penggunaan">
+            <label class="strategy-opt">
+              <input type="radio" name="llm_strategy" value="manual" checked>
+              <div>
+                <strong>Manual</strong>
+                <span>Pakai Model utama + fallback di tab Model.</span>
+              </div>
+            </label>
+            <label class="strategy-opt">
+              <input type="radio" name="llm_strategy" value="round_robin">
+              <div>
+                <strong>Bergantian</strong>
+                <span>Tiap pesan memakai provider berikutnya, pindah otomatis jika gagal.</span>
+              </div>
+            </label>
+            <label class="strategy-opt">
+              <input type="radio" name="llm_strategy" value="priority">
+              <div>
+                <strong>Prioritas</strong>
+                <span>Selalu provider berprioritas teratas, pindah jika gagal.</span>
+              </div>
+            </label>
           </div>
         </div>
         <div id="providersList" class="provider-list"></div>
@@ -1226,10 +1267,35 @@
     defaults: null,
     limits: { knowledge_warn_chars: 12000 },
     providers: [],
+    maxProviders: 5,
+    maxKeysPerProvider: 20,
+    serverNow: 0,
     hasRevealPassword: false,
     tab: 'dashboard',
     statusTimer: null
   };
+
+  var KEY_STATUS_META = {
+    valid: { label: 'Valid', variant: 'success' },
+    invalid: { label: 'Ditolak', variant: 'danger' },
+    rate_limited: { label: 'Kena limit', variant: 'warning' },
+    unreachable: { label: 'Tidak terjangkau', variant: 'warning' },
+    error: { label: 'Error', variant: 'warning' },
+    '': { label: 'Belum dites', variant: '' }
+  };
+
+  function formatProbeSummary(res, includeSuccessNote) {
+    var statusKey = (res && typeof res.status === 'string' && KEY_STATUS_META[res.status]) ? res.status : '';
+    var meta = KEY_STATUS_META[statusKey] || KEY_STATUS_META[''];
+    var parts = [meta.label];
+    if (res && typeof res.latencyMs === 'number') parts.push(res.latencyMs + ' ms');
+    if (res && Array.isArray(res.models)) parts.push(res.models.length + ' model');
+    var head = parts.join(' \u00b7 ');
+    if (res && res.note && (!res.ok || includeSuccessNote || res.status === 'rate_limited')) {
+      return head + ' \u2014 ' + res.note;
+    }
+    return head;
+  }
 
   var PAGE_META = {
     dashboard: ['Dashboard', 'Status WhatsApp, runtime, dan level log.'],
@@ -1454,6 +1520,7 @@
     if (opts.placeholder) input.setAttribute('placeholder', opts.placeholder);
     if (opts.autocomplete) input.setAttribute('autocomplete', opts.autocomplete);
     if (opts.minLength) input.setAttribute('minlength', String(opts.minLength));
+    if (opts.list) input.setAttribute('list', String(opts.list));
     if (opts.required) input.setAttribute('required', '');
     input.setAttribute('aria-label', opts.label);
     var wrap = h('label', { class: 'field' },
@@ -1467,11 +1534,13 @@
   function openFormModal(config) {
     var form = h('form', { class: 'stack', novalidate: 'novalidate' });
     var fields = [];
+    var inputsByName = {};
     config.fields.forEach(function (field) {
       if (field.type === 'switch') {
         var check = h('input', { type: 'checkbox' });
         check.checked = Boolean(field.value);
         fields.push({ name: field.name, input: check, type: 'switch', required: false });
+        inputsByName[field.name] = check;
         form.append(h('label', { class: 'switch' },
           check,
           h('span', { class: 'switch-track', 'aria-hidden': 'true' }),
@@ -1486,8 +1555,14 @@
         type: field.type || 'text',
         required: Boolean(field.required)
       });
+      inputsByName[field.name] = made.input;
       form.append(made.wrap);
     });
+
+    if (config.extraNode) {
+      var extra = typeof config.extraNode === 'function' ? config.extraNode(inputsByName) : config.extraNode;
+      if (extra) form.append(extra);
+    }
 
     var error = h('p', { class: 'field-error', role: 'alert' });
     form.append(error);
@@ -1622,6 +1697,31 @@
   }
 
   /* ---------- settings ---------- */
+  function currentStrategy() {
+    var s = state.settings && state.settings.llm_strategy;
+    return (s === 'round_robin' || s === 'priority') ? s : 'manual';
+  }
+
+  function syncModelStrategyUi() {
+    var strategy = currentStrategy();
+    var isManual = strategy === 'manual';
+    var hint = $('#modelStrategyHint');
+    if (hint) hint.classList.toggle('hidden', isManual);
+    var modelInput = $('#modelInput');
+    if (modelInput) modelInput.disabled = !isManual;
+    var fallbackInput = $('#fallbackModelsInput');
+    if (fallbackInput) fallbackInput.disabled = !isManual;
+    var loadBtn = $('#loadModelsBtn');
+    if (loadBtn) loadBtn.disabled = !isManual;
+
+    $$('#strategyGroup input[name="llm_strategy"]').forEach(function (radio) {
+      var active = radio.value === strategy;
+      radio.checked = active;
+      var opt = radio.closest('.strategy-opt');
+      if (opt) opt.classList.toggle('active', active);
+    });
+  }
+
   function fillAll() {
     $$('[data-key]').forEach(function (el) {
       var value = state.settings ? state.settings[el.dataset.key] : undefined;
@@ -1631,6 +1731,7 @@
       else if (value === undefined || value === null) el.value = '';
       else el.value = String(value);
     });
+    syncModelStrategyUi();
   }
 
   function read(root) {
@@ -1702,7 +1803,7 @@
       models.forEach(function (item) { providers[item.provider] = true; });
       var providerCount = Object.keys(providers).length;
       var input = $('#modelInput');
-      if (state.settings && !state.settings.model && models.length > 0) {
+      if (state.settings && currentStrategy() === 'manual' && !state.settings.model && models.length > 0) {
         var firstModel = models[0].value;
         input.value = firstModel;
         try {
@@ -1870,6 +1971,9 @@
     try {
       var data = await api('/api/providers');
       state.providers = data.providers || [];
+      if (typeof data.maxProviders === 'number') state.maxProviders = data.maxProviders;
+      if (typeof data.maxKeysPerProvider === 'number') state.maxKeysPerProvider = data.maxKeysPerProvider;
+      state.serverNow = typeof data.serverNow === 'number' ? data.serverNow : Date.now();
       renderProviders();
     } catch (err) {
       list.replaceChildren(h('div', { class: 'empty' }, h('p', { text: 'Gagal memuat provider: ' + err.message })));
@@ -1877,6 +1981,18 @@
   }
 
   function renderProviders() {
+    var title = $('#providersTitle');
+    if (title) {
+      title.textContent = 'Provider & API key (' + state.providers.length + '/' + state.maxProviders + ')';
+    }
+    var addBtn = $('#addProviderBtn');
+    if (addBtn) {
+      var atMax = state.providers.length >= state.maxProviders;
+      addBtn.disabled = atMax;
+      if (atMax) addBtn.setAttribute('title', 'Maksimal ' + state.maxProviders + ' provider.');
+      else addBtn.removeAttribute('title');
+    }
+
     var list = $('#providersList');
     list.replaceChildren();
     if (state.providers.length === 0) {
@@ -1957,43 +2073,116 @@
       text: 'Lihat model',
       onclick: function () { openProviderModelsModal(provider); }
     });
+    var keyRowRefs = [];
+    var testAllBtn = h('button', {
+      type: 'button',
+      class: 'btn btn-secondary btn-sm',
+      text: 'Tes semua key',
+      onclick: function () {
+        runAction(testAllBtn, async function () {
+          for (var i = 0; i < keyRowRefs.length; i += 1) {
+            await keyRowRefs[i].runTest();
+          }
+        });
+      }
+    });
+    if (provider.keys.length === 0) testAllBtn.disabled = true;
+
     var addKeyBtn = h('button', {
       type: 'button',
       class: 'btn btn-secondary btn-sm',
       text: '+ Tambah key',
       onclick: function () { openKeyModal(provider); }
     });
+    if (provider.keys.length >= state.maxKeysPerProvider) {
+      addKeyBtn.disabled = true;
+      addKeyBtn.setAttribute('title', 'Maksimal ' + state.maxKeysPerProvider + ' key per provider.');
+    }
 
     var keyList = h('div', { class: 'key-list' });
     if (provider.keys.length === 0) {
       keyList.append(h('p', { class: 'hint', text: 'Belum ada key untuk provider ini.' }));
     } else {
       provider.keys.forEach(function (key) {
-        keyList.append(renderKeyRow(provider, key));
+        var rowRef = renderKeyRow(provider, key);
+        keyRowRefs.push(rowRef);
+        keyList.append(rowRef.node);
       });
+    }
+
+    var titleBadges = [
+      h('h3', { text: provider.name }),
+      badge(provider.enabled ? 'Aktif' : 'Nonaktif', provider.enabled ? 'success' : 'danger'),
+      badge('Prioritas ' + provider.priority, '')
+    ];
+    if (currentStrategy() !== 'manual' && !provider.model) {
+      titleBadges.push(badge('Model belum diatur (tidak ikut giliran)', 'warning'));
     }
 
     return h('article', { class: 'provider-card' },
       h('div', { class: 'provider-head' },
         h('div', {},
-          h('div', { class: 'provider-title' },
-            h('h3', { text: provider.name }),
-            badge(provider.enabled ? 'Aktif' : 'Nonaktif', provider.enabled ? 'success' : 'danger'),
-            badge('Prioritas ' + provider.priority, '')
-          ),
-          h('p', { class: 'provider-base mono', text: provider.baseUrl })
+          h('div', { class: 'provider-title' }, titleBadges),
+          h('p', { class: 'provider-base mono', text: provider.baseUrl }),
+          h('p', { class: 'provider-base mono', text: 'Model: ' + (provider.model || '-') })
         ),
         h('div', { class: 'row' }, providerSwitch, editBtn, deleteBtn)
       ),
       h('div', { class: 'provider-keys-head' },
-        h('h4', { text: 'API key' }),
-        h('div', { class: 'row' }, modelsBtn, testBtn, addKeyBtn)
+        h('h4', { text: 'API key (' + provider.keys.length + '/' + state.maxKeysPerProvider + ')' }),
+        h('div', { class: 'row' }, modelsBtn, testBtn, testAllBtn, addKeyBtn)
       ),
       keyList
     );
   }
 
+  function renderKeyBadges(container, key) {
+    container.replaceChildren();
+    var statusKey = (key && typeof key.lastStatus === 'string' && KEY_STATUS_META[key.lastStatus]) ? key.lastStatus : '';
+    var meta = KEY_STATUS_META[statusKey] || KEY_STATUS_META[''];
+    container.append(badge(meta.label, meta.variant));
+    var nowTs = state.serverNow || Date.now();
+    if (key.cooldownUntil && key.cooldownUntil > nowTs) {
+      var sec = Math.max(1, Math.ceil((key.cooldownUntil - nowTs) / 1000));
+      container.append(badge('Cooldown ' + sec + 's', 'warning'));
+    }
+    if (key.failCount && key.failCount > 0) {
+      container.append(badge('Gagal ' + key.failCount + 'x', 'warning'));
+    }
+  }
+
   function renderKeyRow(provider, key) {
+    var statusWrap = h('span', { class: 'row' });
+    renderKeyBadges(statusWrap, key);
+    var probeInfo = h('span', { class: 'muted small' });
+
+    var testKeyBtn = h('button', {
+      type: 'button',
+      class: 'btn btn-secondary btn-sm',
+      text: 'Tes'
+    });
+
+    async function doTestKey() {
+      await runAction(testKeyBtn, async function () {
+        var res = await api('/api/providers/' + provider.id + '/keys/' + key.id + '/test', {
+          method: 'POST',
+          body: '{}'
+        });
+        key.lastStatus = res.status || 'error';
+        key.lastCheckedAt = Date.now();
+        if (res.status === 'valid') {
+          key.cooldownUntil = 0;
+          key.failCount = 0;
+        }
+        renderKeyBadges(statusWrap, key);
+        probeInfo.textContent = formatProbeSummary(res, false);
+      });
+    }
+
+    testKeyBtn.addEventListener('click', function () {
+      doTestKey();
+    });
+
     var toggleBtn = h('button', {
       type: 'button',
       class: 'btn btn-secondary btn-sm',
@@ -2035,14 +2224,17 @@
       }
     });
 
-    return h('div', { class: 'key-row' },
+    var node = h('div', { class: 'key-row' },
       h('div', { class: 'key-meta' },
         badge(key.enabled ? 'Aktif' : 'Nonaktif', key.enabled ? 'success' : 'danger'),
         h('span', { class: 'mono', text: key.label }),
-        h('code', { class: 'key-mask', text: key.keyLast4 })
+        h('code', { class: 'key-mask', text: key.keyLast4 }),
+        statusWrap,
+        probeInfo
       ),
-      h('div', { class: 'row' }, toggleBtn, revealBtn, deleteBtn)
+      h('div', { class: 'row' }, testKeyBtn, toggleBtn, revealBtn, deleteBtn)
     );
+    return { node: node, runTest: doTestKey };
   }
 
   async function testProvider(provider, button) {
@@ -2052,9 +2244,10 @@
         var modelCount = Array.isArray(result.models) ? result.models.length : 0;
         toast('Koneksi OK · ' + modelCount + ' model · ' + result.latencyMs + ' ms');
       } else {
-        var detail = result.status ? 'HTTP ' + result.status : (result.error || 'gagal');
+        var detail = result.note || (result.httpStatus ? 'HTTP ' + result.httpStatus : (result.error || 'gagal'));
         toast('Koneksi gagal: ' + detail, 'error');
       }
+      await refreshProviders();
     });
   }
 
@@ -2116,6 +2309,14 @@
         required: true
       },
       {
+        name: 'model',
+        label: 'Model default',
+        value: provider ? (provider.model || '') : '',
+        list: 'providerModalModels',
+        placeholder: 'pilih atau ketik model (opsional)',
+        hint: 'Dipakai saat mode Bergantian/Prioritas dan saat tes key. Klik "Tes dulu" untuk memuat daftar model.'
+      },
+      {
         name: 'priority',
         label: 'Prioritas',
         type: 'number',
@@ -2138,6 +2339,44 @@
     openFormModal({
       title: provider ? 'Ubah provider' : 'Tambah provider',
       fields: fields,
+      extraNode: function (inputs) {
+        var datalist = h('datalist', { id: 'providerModalModels' });
+        var resultText = h('span', { class: 'muted small' });
+        var probeBtn = h('button', {
+          type: 'button',
+          class: 'btn btn-secondary btn-sm',
+          text: 'Tes dulu',
+          onclick: function () {
+            var baseUrl = inputs.baseUrl ? inputs.baseUrl.value.trim() : '';
+            var modelVal = inputs.model ? inputs.model.value.trim() : '';
+            var apiKeyVal = inputs.apiKey ? inputs.apiKey.value : '';
+            if (!baseUrl) {
+              resultText.textContent = 'Isi Base URL terlebih dahulu.';
+              return;
+            }
+            resultText.textContent = 'menguji...';
+            runAction(probeBtn, async function () {
+              var res = await api('/api/llm/test', {
+                method: 'POST',
+                body: JSON.stringify({
+                  baseUrl: baseUrl,
+                  apiKey: apiKeyVal,
+                  model: modelVal || undefined,
+                  providerId: provider ? provider.id : undefined
+                })
+              });
+              if (Array.isArray(res.models) && res.models.length > 0) {
+                datalist.replaceChildren();
+                res.models.forEach(function (m) {
+                  datalist.append(h('option', { value: m, label: m }));
+                });
+              }
+              resultText.textContent = formatProbeSummary(res, true);
+            });
+          }
+        });
+        return h('div', { class: 'row' }, datalist, probeBtn, resultText);
+      },
       submitLabel: provider ? 'Simpan' : 'Tambah',
       onSubmit: async function (values) {
         var priority = Number(values.priority);
@@ -2148,6 +2387,7 @@
             body: JSON.stringify({
               name: values.name,
               baseUrl: values.baseUrl,
+              model: values.model || '',
               priority: priority,
               enabled: Boolean(values.enabled)
             })
@@ -2156,7 +2396,12 @@
         } else {
           var created = await api('/api/providers', {
             method: 'POST',
-            body: JSON.stringify({ name: values.name, baseUrl: values.baseUrl, priority: priority })
+            body: JSON.stringify({
+              name: values.name,
+              baseUrl: values.baseUrl,
+              model: values.model || '',
+              priority: priority
+            })
           });
           if (values.apiKey) {
             try {
@@ -2190,6 +2435,34 @@
           required: true
         }
       ],
+      extraNode: function (inputs) {
+        var resultText = h('span', { class: 'muted small' });
+        var probeBtn = h('button', {
+          type: 'button',
+          class: 'btn btn-secondary btn-sm',
+          text: 'Tes dulu',
+          onclick: function () {
+            var apiKeyVal = inputs.apiKey ? inputs.apiKey.value : '';
+            if (!apiKeyVal) {
+              resultText.textContent = 'Isi API key terlebih dahulu.';
+              return;
+            }
+            resultText.textContent = 'menguji...';
+            runAction(probeBtn, async function () {
+              var res = await api('/api/llm/test', {
+                method: 'POST',
+                body: JSON.stringify({
+                  baseUrl: provider.baseUrl,
+                  apiKey: apiKeyVal,
+                  model: provider.model || undefined
+                })
+              });
+              resultText.textContent = formatProbeSummary(res, true);
+            });
+          }
+        });
+        return h('div', { class: 'row' }, probeBtn, resultText);
+      },
       submitLabel: 'Tambah key',
       onSubmit: async function (values) {
         await api('/api/providers/' + provider.id + '/keys', {
@@ -2433,6 +2706,30 @@
     $('#refreshAudit').addEventListener('click', refreshAudit);
     $('#refreshProviders').addEventListener('click', refreshProviders);
     $('#addProviderBtn').addEventListener('click', function () { openProviderModal(null); });
+
+    $$('#strategyGroup input[name="llm_strategy"]').forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        if (!radio.checked) return;
+        var chosen = radio.value;
+        var prev = currentStrategy();
+        runAction(null, async function () {
+          try {
+            var data = await api('/api/settings', {
+              method: 'PUT',
+              body: JSON.stringify({ llm_strategy: chosen })
+            });
+            state.settings = data.settings;
+            fillAll();
+            renderProviders();
+            toast('Mode penggunaan disimpan');
+          } catch (err) {
+            if (state.settings) state.settings.llm_strategy = prev;
+            syncModelStrategyUi();
+            throw err;
+          }
+        });
+      });
+    });
 
     $$('.js-theme').forEach(function (button) {
       button.addEventListener('click', function () {

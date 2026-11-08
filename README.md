@@ -16,7 +16,7 @@ di STB.
 - QR login + pairing code, reconnect otomatis dengan backoff.
 - Pengamanan berlapis: pemisahan instruksi/data, filter regex injeksi, strike/mute,
   rate limit, sanitasi output, dan deteksi kebocoran prompt.
-- **Multi-provider & multi-key**: rotasi key round-robin, cooldown otomatis saat 429/401/5xx.
+- **Multi-provider & multi-key**: hingga 5 provider dan 20 API key per provider, dikelola penuh dari web admin; mendukung 3 mode (`manual`, `round_robin` bergantian antar provider, `priority`), model default per provider, rotasi key round-robin + cooldown otomatis saat 429/401/403/5xx, serta tes validitas key per individu maupun sebelum disimpan.
 - **Enkripsi key**: API key dienkripsi AES-256-GCM (kunci dari `SECRET_KEY`), tidak pernah keluar dalam bentuk plaintext.
 - **Password reveal**: password hanya diatur lewat `REVEAL_PASSWORD` di `.env` (minimal 12 karakter), dipakai untuk membuka key asli, dengan audit percobaan berhasil/gagal.
 - **Level log dari web**: `LOG_LEVEL` hanya nilai awal; level bisa diubah langsung dari Dashboard.
@@ -55,12 +55,13 @@ src/
   db.ts         node:sqlite + migrasi + prune
   settings.ts   get/set settings + cache
   crypto.ts     enkripsi AES-256-GCM, hash scrypt
-  providers.ts  provider/key CRUD, LlmContext round-robin
+  providers.ts  provider/key CRUD, rotasi provider/key, buildModelPlan
+  endpoint.ts   normalisasi Base URL + kandidat endpoint OpenAI
   wa.ts         Baileys: QR/pairing, reconnect, terima/kirim
   pipeline.ts   alur pesan -> balasan (tanpa Baileys)
   guard.ts      normalisasi, rate limit, injeksi, strike/mute
   prompt.ts     system prompt + messages
-  llm.ts        klien LLM multi-provider, timeout/retry/fallback
+  llm.ts        klien LLM multi-provider, timeout/retry/fallback, probeProvider
   sanitize.ts   filter output + deteksi kebocoran
   memory.ts     riwayat per nomor
   queue.ts      serial per nomor + konkurensi global 2
@@ -278,10 +279,18 @@ Tab:
 - **Knowledge** — editor knowledge + penghitung karakter (peringatan > 12.000).
 - **Model** — pilihan model diambil dari provider aktif (dropdown/datalist), plus
   fallback (satu per baris), temperature, max tokens, giliran riwayat, tes koneksi LLM.
-- **Provider** — kelola provider LLM (CRUD), isi API key langsung saat menambah
-  provider (opsional, label `primary`), tambah/hapus key lain, toggle aktif/nonaktif,
-  prioritas, lihat key (verifikasi password reveal), lihat daftar model provider, tes
-  koneksi. Password reveal **tidak** diatur di sini, melainkan lewat `.env`.
+  Saat mode `round_robin` atau `priority` aktif, input Model utama dan fallback otomatis
+  dinonaktifkan karena model ditentukan per provider di tab **Provider**.
+- **Provider** — kelola hingga **5 provider** dan **20 API key per provider** (CRUD),
+  pilih mode penggunaan (**Manual** `manual`, **Bergantian** `round_robin`, atau
+  **Prioritas** `priority`), atur **Model default** per provider, tes key sebelum
+  disimpan (**Tes dulu** di modal tambah/ubah provider maupun tambah key), tes per key
+  atau **Tes semua key** secara berurutan (2 tahap: `GET /models` + `POST /chat/completions`),
+  lihat status key (`Valid`, `Ditolak`, `Kena limit`, `Tidak terjangkau`, `Error`,
+  cooldown, jumlah gagal), toggle aktif/nonaktif, dan lihat key asli (verifikasi
+  `REVEAL_PASSWORD` dari `.env`). Untuk memverifikasi rotasi provider (`round_robin`)
+  atau fallback (`priority`), kirim beberapa pesan lewat tab **Uji Coba** lalu periksa
+  kolom **Model** (`namaProvider/namaModel`) di tab **Log**.
 - **Guard** — saklar chat/grup, allowlist, batas panjang, rate limit, cooldown grup,
   strike/mute, blocklist/allowlist, regex injeksi (divalidasi sebelum simpan).
 - **Uji Coba** — memanggil `/api/test` dengan `chat_id=admin-test`; menampilkan
@@ -297,12 +306,14 @@ GET     /api/models             GET    /api/audit
 POST    /api/wa/pairing         POST   /api/wa/logout
 POST    /api/bot/toggle         POST   /api/test
 GET     /api/logs               POST   /api/llm/ping
+POST    /api/llm/test
 GET     /api/providers          POST   /api/providers
 PUT     /api/providers/:id      DELETE /api/providers/:id
 POST    /api/providers/:id/toggle       POST /api/providers/:id/test
 GET     /api/providers/:id/models
 POST    /api/providers/:id/keys         DELETE /api/providers/:id/keys/:keyId
 POST    /api/providers/:id/keys/:keyId/toggle
+POST    /api/providers/:providerId/keys/:keyId/test
 POST    /api/keys/:keyId/reveal
 GET     /healthz
 ```
