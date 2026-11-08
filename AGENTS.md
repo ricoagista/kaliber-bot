@@ -46,6 +46,7 @@ src/queue.ts      antrean serial per nomor, konkurensi global 2
 src/api.ts        route /api/* + auth + validasi
 src/logger.ts     pino
 public/index.html web admin
+public/kaliber.avif logo & favicon lokal aplikasi
 ```
 
 ## Provider & API key

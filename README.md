@@ -67,7 +67,8 @@ src/
   queue.ts      serial per nomor + konkurensi global 2
   api.ts        route /api/* + auth + validasi
   logger.ts     pino
-public/index.html   web admin (vanilla JS/CSS, dark mode)
+public/index.html   web admin (vanilla JS/CSS, tema terang & gelap sesuai DESIGN.md)
+public/kaliber.avif logo & favicon lokal aplikasi
 knowledge/kaliber.template.md
 scripts/test-injection.ts
 test/*.test.ts

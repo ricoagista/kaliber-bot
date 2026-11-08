@@ -132,7 +132,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): EnvConfig {
     dataDir: source.DATA_DIR?.trim() || path.resolve('data'),
     tz: source.TZ?.trim() || 'Asia/Jakarta',
     adminToken: (source.ADMIN_TOKEN ?? '').trim(),
-    routerUrl: (source.ROUTER_URL?.trim() || 'http://host.containers.internal:20128/v1').replace(/\/+$/, ''),
+    routerUrl: (source.ROUTER_URL?.trim() || '').replace(/\/+$/, ''),
     routerKey: source.ROUTER_KEY ?? '',
     defaultModel: source.DEFAULT_MODEL?.trim() || '',
     logLevel: source.LOG_LEVEL?.trim() || 'warn',
