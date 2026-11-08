@@ -1,5 +1,11 @@
-export type LlmStrategy = 'manual' | 'round_robin' | 'priority';
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
+
+export type ModelRoutingMode = 'fallback' | 'round_robin' | 'fusion';
+export const VALID_MODEL_MODES: readonly ModelRoutingMode[] = [
+  'fallback',
+  'round_robin',
+  'fusion',
+] as const;
 
 export interface Settings {
   bot_enabled: boolean;
@@ -12,7 +18,7 @@ export interface Settings {
   trigger_prefix: string;
   model: string;
   fallback_models: string[];
-  llm_strategy: LlmStrategy;
+  model_mode: ModelRoutingMode;
   temperature: number;
   max_tokens: number;
   history_turns: number;
@@ -67,12 +73,6 @@ export const VALID_LOG_LEVELS: readonly LogLevel[] = [
   'fatal',
 ] as const;
 
-export const VALID_LLM_STRATEGIES: readonly LlmStrategy[] = [
-  'manual',
-  'round_robin',
-  'priority',
-] as const;
-
 export const DEFAULT_SETTINGS: Settings = {
   bot_enabled: true,
   private_enabled: true,
@@ -84,7 +84,7 @@ export const DEFAULT_SETTINGS: Settings = {
   trigger_prefix: '!kaliber',
   model: '',
   fallback_models: [],
-  llm_strategy: 'manual',
+  model_mode: 'fallback',
   temperature: 0.3,
   max_tokens: 300,
   history_turns: 4,
@@ -116,8 +116,6 @@ export interface EnvConfig {
   trustProxy: boolean;
   dataDir: string;
   tz: string;
-  routerUrl: string;
-  routerKey: string;
   defaultModel: string;
   logLevel: LogLevel;
 }
@@ -142,8 +140,6 @@ export function loadEnv(): EnvConfig {
     trustProxy: (process.env.TRUST_PROXY ?? 'false').trim().toLowerCase() === 'true',
     dataDir: (process.env.DATA_DIR ?? './data').trim() || './data',
     tz,
-    routerUrl: (process.env.ROUTER_URL ?? '').trim(),
-    routerKey: (process.env.ROUTER_KEY ?? '').trim(),
     defaultModel: (process.env.DEFAULT_MODEL ?? '').trim(),
     logLevel,
   };

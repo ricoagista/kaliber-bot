@@ -6,15 +6,16 @@ import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import {
   DEFAULT_SETTINGS,
-  VALID_LLM_STRATEGIES,
   VALID_LOG_LEVELS,
-  type LlmStrategy,
+  VALID_MODEL_MODES,
   type LogLevel,
+  type ModelRoutingMode,
   type Settings,
 } from './config.js';
 import { hasRevealPassword, verifyRevealPassword } from './crypto.js';
-import { getRecentAudit, getRecentLogs, getStatusCounts, insertAudit } from './db.js';
+import { clearLogs, getRecentAudit, getRecentLogs, getStatusCounts, insertAudit } from './db.js';
 import { invalidPatterns } from './guard.js';
+import { clearConsoleLogs, getConsoleLogs } from './logger.js';
 import {
   fetchAllProvidersModels,
   fetchProviderModels,
@@ -25,6 +26,7 @@ import { handleMessage } from './pipeline.js';
 import {
   MAX_KEYS_PER_PROVIDER,
   MAX_PROVIDERS,
+  parseProviderFormat,
   ProviderError,
   addProviderKey,
   createProvider,
@@ -181,20 +183,6 @@ export function validateSettingsPayload(
       continue;
     }
 
-    if (key === 'llm_strategy') {
-      if (
-        typeof val !== 'string' ||
-        !(VALID_LLM_STRATEGIES as readonly string[]).includes(val)
-      ) {
-        return {
-          ok: false,
-          error: 'Pengaturan "llm_strategy" wajib bernilai manual, round_robin, atau priority.',
-        };
-      }
-      patch[key] = val as LlmStrategy;
-      continue;
-    }
-
     if (key === 'log_level') {
       if (typeof val !== 'string' || !(VALID_LOG_LEVELS as readonly string[]).includes(val)) {
         return {
@@ -203,6 +191,17 @@ export function validateSettingsPayload(
         };
       }
       patch[key] = val as LogLevel;
+      continue;
+    }
+
+    if (key === 'model_mode') {
+      if (typeof val !== 'string' || !(VALID_MODEL_MODES as readonly string[]).includes(val as ModelRoutingMode)) {
+        return {
+          ok: false,
+          error: 'Pengaturan "model_mode" tidak valid. Pilihan: fallback, round_robin, fusion.',
+        };
+      }
+      patch[key] = val as ModelRoutingMode;
       continue;
     }
 
@@ -499,6 +498,25 @@ export function createApi(opts: ApiOptions): Hono {
     return c.json({ logs });
   });
 
+  // DELETE /api/logs
+  app.delete('/api/logs', (c) => {
+    const deletedCount = clearLogs();
+    return c.json({ ok: true, deletedCount });
+  });
+
+  // GET /api/console
+  app.get('/api/console', (c) => {
+    const since = Number.parseInt(c.req.query('since') || '0', 10);
+    const logs = getConsoleLogs(Number.isFinite(since) ? since : 0);
+    return c.json({ logs });
+  });
+
+  // DELETE /api/console
+  app.delete('/api/console', (c) => {
+    clearConsoleLogs();
+    return c.json({ ok: true });
+  });
+
   // GET /api/audit
   app.get('/api/audit', (c) => {
     const audit = getRecentAudit(50);
@@ -525,11 +543,13 @@ export function createApi(opts: ApiOptions): Hono {
       baseUrl?: unknown;
       apiKey?: unknown;
       model?: unknown;
+      format?: unknown;
       providerId?: unknown;
       keyId?: unknown;
     };
 
     const probe = await probeProvider({
+      format: parseProviderFormat(body?.format) ?? undefined,
       baseUrl: typeof body?.baseUrl === 'string' ? body.baseUrl : undefined,
       apiKey: typeof body?.apiKey === 'string' ? body.apiKey : undefined,
       model: typeof body?.model === 'string' ? body.model : undefined,
@@ -560,8 +580,9 @@ export function createApi(opts: ApiOptions): Hono {
     const body = (await c.req.json().catch(() => null)) as {
       name?: unknown;
       baseUrl?: unknown;
-      model?: unknown;
-      priority?: unknown;
+      format?: unknown;
+      apiKey?: unknown;
+      keyLabel?: unknown;
       enabled?: unknown;
     } | null;
 
@@ -573,8 +594,9 @@ export function createApi(opts: ApiOptions): Hono {
       const created = createProvider({
         name: typeof body.name === 'string' ? body.name : '',
         baseUrl: typeof body.baseUrl === 'string' ? body.baseUrl : '',
-        model: typeof body.model === 'string' ? body.model : undefined,
-        priority: typeof body.priority === 'number' ? body.priority : undefined,
+        format: body.format,
+        apiKey: typeof body.apiKey === 'string' ? body.apiKey : '',
+        keyLabel: typeof body.keyLabel === 'string' ? body.keyLabel : undefined,
         enabled: typeof body.enabled === 'boolean' ? body.enabled : undefined,
       });
       return c.json({ ok: true, provider: created }, 201);
@@ -595,8 +617,7 @@ export function createApi(opts: ApiOptions): Hono {
     const body = (await c.req.json().catch(() => null)) as {
       name?: unknown;
       baseUrl?: unknown;
-      model?: unknown;
-      priority?: unknown;
+      format?: unknown;
       enabled?: unknown;
     } | null;
 
@@ -608,8 +629,7 @@ export function createApi(opts: ApiOptions): Hono {
       const updated = updateProvider(id, {
         name: typeof body.name === 'string' ? body.name : undefined,
         baseUrl: typeof body.baseUrl === 'string' ? body.baseUrl : undefined,
-        model: typeof body.model === 'string' ? body.model : undefined,
-        priority: typeof body.priority === 'number' ? body.priority : undefined,
+        format: body.format,
         enabled: typeof body.enabled === 'boolean' ? body.enabled : undefined,
       });
       return c.json({ ok: true, provider: updated });

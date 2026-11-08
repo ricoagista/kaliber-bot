@@ -21,12 +21,12 @@ Kaliber Bot adalah chatbot WhatsApp otomatis dan web admin untuk LSO Kaliber (UM
 ## 4. Struktur Kode
 ```text
 src/
-  index.ts      Bootstrap aplikasi: validasi env, init DB, init settings, seed provider, start WA & HTTP, jadwal prune, graceful shutdown
+  index.ts      Bootstrap aplikasi: validasi env, init DB, init settings, start WA & HTTP, jadwal prune, graceful shutdown
   config.ts     Pembacaan environment variables, nilai DEFAULT_SETTINGS, DEFAULT_SYSTEM_PROMPT, DEFAULT_INJECTION_PATTERNS
   db.ts         Koneksi node:sqlite (WAL mode), migrasi berurutan (PRAGMA user_version), fungsi query log/audit/strike/mute, pruneStorage()
   settings.ts   Cache settings in-memory, initSettings(), getSetting(), getSettings(), updateSettings(), resetSettings()
   crypto.ts     Enkripsi/dekripsi API key (AES-256-GCM + scrypt KEK cache format v2), migrasi format legacy, verifikasi REVEAL_PASSWORD
-  providers.ts  CRUD provider & key, rotasi key round-robin + cooldown, strategi LLM (manual / round_robin / priority), buildModelPlan()
+  providers.ts  CRUD provider & key, rotasi key round-robin + cooldown, buildModelPlan()
   endpoint.ts   Normalisasi Base URL provider & generator kandidat URL (/v1/... dan non-/v1/...)
   wa.ts         Koneksi Baileys WhatsApp, QR/pairing code, auto-reconnect eksponensial, ekstraksi pesan & JID, kirim balasan + efek mengetik
   pipeline.ts   Alur utama pemrosesan pesan 10 langkah (bebas dari dependensi Baileys)
@@ -44,9 +44,12 @@ public/
 ```
 
 ## 5. Provider dan API Key
-- Maksimal **5 provider** dan maksimal **20 API key per provider**.
-- Strategi pemilihan LLM (`llm_strategy`): `manual | round_robin | priority`.
-- Setiap provider memiliki model default (`providers.model`); kandidat model menggunakan format `namaProvider/namaModel`.
+- Maksimal **5 provider** dan maksimal **5 API key per provider**.
+- Setiap provider memiliki format API (`providers.format`): `openai` (`/chat/completions`, header `Authorization: Bearer`) atau `anthropic` (`/messages`, header `x-api-key` + `anthropic-version`).
+- API key terikat pada provider: provider baru wajib dibuat bersama minimal 1 API key (tanpa provider/key bawaan atau contoh).
+- Provider hanya menyimpan endpoint, format, dan API key (tanpa model default, prioritas, maupun strategi).
+- Seluruh manajemen model dipusatkan di tab Model melalui tabel prioritas (hingga 20 model) dan pilihan mode routing (fallback, round robin, atau fusion). Model nomor 1 otomatis menjadi model utama, nomor 2-20 menjadi cadangan.
+- Menghapus provider otomatis membersihkan model terkait dari model utama dan cadangan; mengubah nama provider otomatis menyesuaikan prefix nama model.
 - Pengujian koneksi/key dilakukan di sisi server melalui `probeProvider` (browser tidak pernah memanggil provider LLM secara langsung).
 - Respons hasil tes tidak boleh membocorkan body upstream mentah, plaintext API key, atau URL internal.
 - Status hasil tes disimpan di kolom `provider_keys.last_status` dan `last_checked_at`.
@@ -62,6 +65,7 @@ public/
 ## 7. Aturan Keamanan
 - API key disimpan terenkripsi dengan AES-256-GCM (`v2:`).
 - API key asli, `ADMIN_TOKEN`, `SECRET_KEY`, dan `REVEAL_PASSWORD` tidak boleh muncul di log, pesan error, atau respons `GET` (hanya `keyLast4`).
+- Fitur reveal key memverifikasi password terhadap `ADMIN_TOKEN` secara bawaan (atau `REVEAL_PASSWORD` jika dikonfigurasi). Modal reveal di UI otomatis terisi dengan token sesi admin aktif.
 - Perbandingan token wajib constant-time (`SHA-256` + `timingSafeEqual`).
 - Endpoint sensitif (login, reveal key, endpoint tes) wajib dilindungi rate limit.
 - Jangan pernah melakukan commit terhadap `.env`, `data/`, atau `data.bak/`.

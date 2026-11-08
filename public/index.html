@@ -17,36 +17,42 @@
     })();
   </script>
   <style>
-    /* Token mengikuti DESIGN.md (gaya terinspirasi Notion, bukan aset resmi) */
+    /* Token mengikuti DESIGN.md (gaya terinspirasi Vercel / Geist, bukan aset resmi) */
     /* Skala z-index: header = 10, modal = 100, toast = 110 */
     :root {
-      --bg-page: #fafaf9;
+      --bg-page: #fafafa;
       --bg-surface: #ffffff;
       --bg-elevated: #ffffff;
-      --bg-subtle: #f0eeec;
-      --text-primary: #1a1a1a;
-      --text-secondary: #5d5b54;
-      --border-hairline: #e5e3df;
-      --border-control: #8f8b84;
-      --color-primary: #5645d4;
-      --color-primary-pressed: #4534b3;
+      --bg-subtle: #f5f5f5;
+      --text-primary: #171717;
+      --text-secondary: #4d4d4d;
+      --text-mute: #666666;
+      --border-hairline: #ebebeb;
+      --border-control: #888888;
+      --color-primary: #171717;
+      --color-primary-pressed: #333333;
       --on-primary: #ffffff;
-      --focus-ring: #5645d4;
-      --color-link: #005bab;
+      --focus-ring: #0070f3;
+      --color-link: #0070f3;
+      --color-link-deep: #0761d1;
+      --selection-bg: #171717;
+      --selection-fg: #f2f2f2;
 
-      --badge-success-bg: #d9f3e1;
-      --badge-success-text: #0f6b22;
-      --badge-warn-bg: #ffe8d4;
-      --badge-warn-text: #a24100;
-      --badge-error-bg: #fde0ec;
-      --badge-error-text: #b42318;
-      --badge-neutral-bg: #f0eeec;
-      --badge-neutral-text: #5d5b54;
+      --badge-success-bg: #d3e5ff;
+      --badge-success-text: #0761d1;
+      --badge-warn-bg: #ffefcf;
+      --badge-warn-text: #ab570a;
+      --badge-error-bg: #f7d4d6;
+      --badge-error-text: #c50000;
+      --badge-neutral-bg: #f5f5f5;
+      --badge-neutral-text: #4d4d4d;
 
-      --shadow-card: 0 2px 8px rgba(26, 26, 26, 0.05);
-      --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
-      --backdrop-modal: rgba(10, 21, 48, 0.48);
+      --shadow-card: 0px 1px 1px rgba(0, 0, 0, 0.02), 0px 2px 2px rgba(0, 0, 0, 0.04), 0px 8px 8px -8px rgba(0, 0, 0, 0.04);
+      --shadow-toast: 0px 2px 2px rgba(0, 0, 0, 0.04), 0px 8px 16px -4px rgba(0, 0, 0, 0.06);
+      --shadow-modal: 0px 1px 1px rgba(0, 0, 0, 0.02), 0px 8px 16px -4px rgba(0, 0, 0, 0.06), 0px 24px 32px -8px rgba(0, 0, 0, 0.08);
+      --backdrop-modal: rgba(23, 23, 23, 0.45);
 
+      --radius-xs: 4px;
       --radius-sm: 6px;
       --radius-md: 8px;
       --radius-lg: 12px;
@@ -56,41 +62,53 @@
       --space-xs: 8px;
       --space-sm: 12px;
       --space-md: 16px;
-      --space-lg: 20px;
-      --space-xl: 24px;
-      --space-xxl: 32px;
+      --space-lg: 24px;
+      --space-xl: 32px;
+      --space-2xl: 40px;
+      --space-3xl: 48px;
+      --space-4xl: 64px;
 
-      --font-sans: Inter, -apple-system, system-ui, "Segoe UI", Helvetica, sans-serif;
-      --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --font-sans: Geist, Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+      --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }
 
     [data-theme="dark"] {
-      --bg-page: #070f24;
-      --bg-surface: #0a1530;
-      --bg-elevated: #111d3d;
-      --bg-subtle: #1a2a52;
-      --text-primary: #e6e8ef;
-      --text-secondary: #a4a097;
-      --border-hairline: #1a2a52;
-      --border-control: #5a6a95;
-      --color-primary: #5645d4;
-      --color-primary-pressed: #4534b3;
-      --on-primary: #ffffff;
-      --focus-ring: #d6b6f6;
-      --color-link: #d6b6f6;
+      --bg-page: #0a0a0a;
+      --bg-surface: #111111;
+      --bg-elevated: #171717;
+      --bg-subtle: #1a1a1a;
+      --text-primary: #ededed;
+      --text-secondary: #a1a1a1;
+      --text-mute: #888888;
+      --border-hairline: #262626;
+      --border-control: #666666;
+      --color-primary: #ededed;
+      --color-primary-pressed: #d4d4d4;
+      --on-primary: #171717;
+      --focus-ring: #3291ff;
+      --color-link: #3291ff;
+      --color-link-deep: #68b5ff;
+      --selection-bg: #ededed;
+      --selection-fg: #171717;
 
-      --badge-success-bg: #0d2e1b;
-      --badge-success-text: #1aae39;
-      --badge-warn-bg: #332010;
-      --badge-warn-text: #f0a35c;
-      --badge-error-bg: #381523;
-      --badge-error-text: #ff8a8a;
-      --badge-neutral-bg: #1a2a52;
-      --badge-neutral-text: #a4a097;
+      --badge-success-bg: #0f2942;
+      --badge-success-text: #68b5ff;
+      --badge-warn-bg: #2e1d09;
+      --badge-warn-text: #f5a623;
+      --badge-error-bg: #361216;
+      --badge-error-text: #ff6166;
+      --badge-neutral-bg: #1f1f1f;
+      --badge-neutral-text: #a1a1a1;
 
-      --shadow-card: 0 2px 8px rgba(7, 15, 36, 0.35);
-      --shadow-modal: 0 16px 48px -8px rgba(7, 15, 36, 0.65);
-      --backdrop-modal: rgba(7, 15, 36, 0.72);
+      --shadow-card: 0px 1px 1px rgba(0, 0, 0, 0.3), 0px 2px 2px rgba(0, 0, 0, 0.4);
+      --shadow-toast: 0px 2px 4px rgba(0, 0, 0, 0.5), 0px 8px 16px -4px rgba(0, 0, 0, 0.6);
+      --shadow-modal: 0px 1px 2px rgba(0, 0, 0, 0.4), 0px 8px 16px -4px rgba(0, 0, 0, 0.6), 0px 24px 32px -8px rgba(0, 0, 0, 0.75);
+      --backdrop-modal: rgba(0, 0, 0, 0.72);
+    }
+
+    ::selection {
+      background-color: var(--selection-bg);
+      color: var(--selection-fg);
     }
 
     *, *::before, *::after {
@@ -103,15 +121,25 @@
       background-color: var(--bg-page);
       color: var(--text-primary);
       font-family: var(--font-sans);
+      font-feature-settings: "ss01", "ss02";
       font-size: 16px;
-      line-height: 1.55;
+      line-height: 24px;
       overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
     }
 
     button, input, select, textarea {
       font-family: inherit;
+      font-feature-settings: inherit;
       color: inherit;
+    }
+
+    a {
+      color: var(--color-link);
+      text-decoration: underline;
+    }
+    a:hover {
+      color: var(--color-link-deep);
     }
 
     :focus-visible {
@@ -158,7 +186,7 @@
       display: block;
     }
 
-    /* Layar Login */
+    /* Layar Login (ex-auth-form-card) */
     .login-shell {
       min-height: 100dvh;
       display: flex;
@@ -173,26 +201,43 @@
       background-color: var(--bg-surface);
       border: 1px solid var(--border-hairline);
       border-radius: var(--radius-lg);
-      padding: var(--space-xxl) var(--space-xl);
+      padding: var(--space-xl);
       box-shadow: var(--shadow-card);
+    }
+
+    @media (max-width: 480px) {
+      .login-shell {
+        padding: 12px;
+      }
+      .login-card {
+        padding: 24px 16px;
+        border-radius: var(--radius-md);
+      }
+      .login-title {
+        font-size: 20px;
+        line-height: 28px;
+      }
     }
 
     .login-title {
       margin: 0 0 var(--space-xs) 0;
-      font-size: 22px;
+      font-size: 24px;
       font-weight: 600;
-      line-height: 1.3;
+      line-height: 32px;
+      letter-spacing: -0.96px;
       text-align: center;
     }
 
     .login-subtitle {
-      margin: 0 0 var(--space-xl) 0;
+      margin: 0 0 var(--space-lg) 0;
       font-size: 14px;
+      line-height: 20px;
+      letter-spacing: -0.28px;
       color: var(--text-secondary);
       text-align: center;
     }
 
-    /* Header & Navigasi */
+    /* Header & Navigasi (nav-bar) */
     .app-header {
       position: sticky;
       top: 0;
@@ -203,10 +248,10 @@
     }
 
     .header-inner {
-      max-width: 1120px;
+      max-width: 1200px;
       height: 100%;
       margin: 0 auto;
-      padding: 0 var(--space-xl);
+      padding: var(--space-sm) var(--space-lg);
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -223,6 +268,8 @@
     .brand-name {
       font-size: 16px;
       font-weight: 600;
+      line-height: 24px;
+      letter-spacing: -0.4px;
       white-space: nowrap;
     }
 
@@ -238,13 +285,17 @@
     }
 
     .tabs-inner {
-      max-width: 1120px;
+      max-width: 1200px;
       margin: 0 auto;
-      padding: 0 var(--space-xl);
+      padding: 0 var(--space-lg);
       display: flex;
-      gap: var(--space-xs);
+      gap: var(--space-xxs);
       overflow-x: auto;
-      scrollbar-width: thin;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    .tabs-inner::-webkit-scrollbar {
+      display: none;
     }
 
     .segmented-tab {
@@ -253,10 +304,16 @@
       border-bottom: 2px solid transparent;
       color: var(--text-secondary);
       font-size: 14px;
-      font-weight: 500;
+      font-weight: 400;
+      line-height: 20px;
+      letter-spacing: -0.28px;
       padding: var(--space-sm) var(--space-md);
       cursor: pointer;
       white-space: nowrap;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      flex: none;
       transition: opacity 150ms ease, transform 150ms ease;
     }
 
@@ -267,22 +324,48 @@
     .segmented-tab[aria-selected="true"] {
       color: var(--text-primary);
       border-bottom-color: var(--text-primary);
-      font-weight: 600;
+      font-weight: 500;
     }
 
     /* Kontainer Utama */
     .main-container {
-      max-width: 1120px;
+      max-width: 1200px;
       margin: 0 auto;
-      padding: var(--space-xl);
+      padding: var(--space-lg);
     }
 
     @media (max-width: 767px) {
       .header-inner,
       .tabs-inner,
       .main-container {
-        padding-left: var(--space-md);
-        padding-right: var(--space-md);
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+      .main-container {
+        padding-top: 12px;
+        padding-bottom: 24px;
+      }
+      .card-base {
+        padding: 16px 12px;
+        margin-bottom: 14px;
+        border-radius: var(--radius-sm);
+      }
+      .card-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--space-sm);
+      }
+      .card-header .btn-row {
+        width: 100%;
+        justify-content: flex-start;
+      }
+      .card-title {
+        font-size: 17px;
+        line-height: 24px;
+      }
+      .card-desc {
+        font-size: 13px;
+        line-height: 18px;
       }
       .brand-name {
         font-size: 15px;
@@ -292,32 +375,47 @@
     @media (max-width: 480px) {
       .app-header {
         height: auto;
-        min-height: 56px;
+        min-height: 52px;
         padding: var(--space-xs) 0;
       }
       .header-inner {
-        flex-wrap: wrap;
+        padding-top: 0;
+        padding-bottom: 0;
+        flex-wrap: nowrap;
         gap: 0.5rem;
       }
       .brand-group {
         gap: var(--space-xs);
+        min-width: 0;
+      }
+      .brand-name {
+        font-size: 14px;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .header-actions {
         gap: 6px;
+        flex: none;
       }
-      .header-actions .btn-sm {
-        padding: 5px 10px;
+      .header-actions .btn-sm:not(.btn-icon) {
+        padding: 0 8px;
+        min-height: 28px;
         font-size: 12px;
+      }
+      .switch-row {
+        font-size: 13px;
+        padding: 10px 0;
       }
     }
 
-    /* Kartu & Seksi */
+    /* Kartu & Seksi (card-marketing) */
     .card-base {
       background-color: var(--bg-surface);
       border: 1px solid var(--border-hairline);
-      border-radius: var(--radius-lg);
-      padding: var(--space-xl);
-      margin-bottom: var(--space-xl);
+      border-radius: var(--radius-md);
+      padding: var(--space-lg);
+      margin-bottom: var(--space-lg);
+      box-shadow: var(--shadow-card);
     }
 
     .card-header {
@@ -331,28 +429,32 @@
 
     .card-title {
       margin: 0;
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 600;
-      line-height: 1.4;
+      line-height: 28px;
+      letter-spacing: -0.6px;
     }
 
     .card-desc {
       margin: var(--space-xxs) 0 0 0;
       font-size: 14px;
+      line-height: 20px;
+      letter-spacing: -0.28px;
       color: var(--text-secondary);
     }
 
-    /* Tombol */
+    /* Tombol (Geist in-app scale: radius 6px, weight 500) */
     .btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       min-height: 40px;
-      padding: 8px 16px;
+      padding: 0 var(--space-md);
       font-size: 14px;
       font-weight: 500;
-      line-height: 1.3;
-      border-radius: var(--radius-md);
+      line-height: 20px;
+      letter-spacing: -0.28px;
+      border-radius: var(--radius-sm);
       border: 1px solid transparent;
       cursor: pointer;
       white-space: nowrap;
@@ -364,7 +466,7 @@
     }
 
     .btn:disabled {
-      opacity: 0.5;
+      opacity: 0.45;
       cursor: not-allowed;
     }
 
@@ -378,7 +480,7 @@
     }
 
     .btn-secondary {
-      background-color: transparent;
+      background-color: var(--bg-surface);
       color: var(--text-primary);
       border-color: var(--border-control);
     }
@@ -394,12 +496,28 @@
     }
 
     .btn-sm {
-      min-height: 34px;
-      padding: 6px 12px;
+      min-height: 32px;
+      padding: 0 var(--space-sm);
       font-size: 13px;
+      line-height: 18px;
     }
 
-    /* Form & Input */
+    .btn-icon {
+      width: 32px;
+      padding: 0;
+    }
+
+    .btn-icon svg {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* Form & Input (form-input: 40px height, 6px radius, 14px body-sm) */
     .field-group {
       display: flex;
       flex-direction: column;
@@ -410,6 +528,8 @@
     .field-label {
       font-size: 14px;
       font-weight: 500;
+      line-height: 20px;
+      letter-spacing: -0.28px;
       color: var(--text-primary);
       display: flex;
       align-items: center;
@@ -419,47 +539,53 @@
 
     .field-hint {
       font-size: 13px;
+      line-height: 18px;
       color: var(--text-secondary);
       margin: 0;
     }
 
     .field-error {
       font-size: 13px;
+      line-height: 18px;
       color: var(--badge-error-text);
       background-color: var(--badge-error-bg);
       padding: var(--space-xs) var(--space-sm);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
       margin-top: var(--space-xxs);
     }
 
     .field-warn {
       font-size: 13px;
+      line-height: 18px;
       color: var(--badge-warn-text);
       background-color: var(--badge-warn-bg);
       padding: var(--space-xs) var(--space-sm);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
       margin-top: var(--space-xxs);
     }
 
     .field-success {
       font-size: 13px;
+      line-height: 18px;
       color: var(--badge-success-text);
       background-color: var(--badge-success-bg);
       padding: var(--space-xs) var(--space-sm);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
       margin-top: var(--space-xxs);
     }
 
     .text-input,
     .select-input {
       width: 100%;
-      height: 44px;
-      padding: 10px 14px;
-      font-size: 15px;
+      height: 40px;
+      padding: 0 var(--space-sm);
+      font-size: 14px;
+      line-height: 20px;
+      letter-spacing: -0.28px;
       background-color: var(--bg-surface);
       color: var(--text-primary);
       border: 1px solid var(--border-control);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
     }
 
     .text-input:read-only,
@@ -474,18 +600,21 @@
     .textarea-input {
       width: 100%;
       min-height: 120px;
-      padding: 12px 14px;
+      padding: var(--space-sm);
       font-size: 14px;
-      line-height: 1.5;
+      line-height: 20px;
       background-color: var(--bg-surface);
       color: var(--text-primary);
       border: 1px solid var(--border-control);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
       resize: vertical;
     }
 
     .mono {
       font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 20px;
+      letter-spacing: 0;
     }
 
     .form-grid-2 {
@@ -517,6 +646,17 @@
       flex-wrap: wrap;
     }
 
+    @media (max-width: 767px) {
+      .form-footer {
+        flex-direction: column-reverse;
+        gap: var(--space-sm);
+      }
+      .form-footer .btn {
+        width: 100%;
+        min-height: 42px;
+      }
+    }
+
     .btn-row {
       display: flex;
       align-items: center;
@@ -531,26 +671,340 @@
       justify-content: space-between;
       gap: var(--space-md);
       padding: var(--space-sm) 0;
+      font-size: 14px;
+      line-height: 20px;
+      letter-spacing: -0.28px;
       border-bottom: 1px solid var(--border-hairline);
     }
     .switch-row:last-child {
       border-bottom: none;
     }
     .switch-input {
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
       accent-color: var(--color-primary);
       cursor: pointer;
     }
 
-    /* Badge (pil hanya untuk badge) */
+    /* Daftar Prioritas Model (Tab Model) */
+    .model-priority-card {
+      margin-bottom: var(--space-md);
+    }
+    .model-priority-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--space-xs);
+    }
+    .model-priority-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin: var(--space-xs) 0 var(--space-sm) 0;
+      max-height: 480px;
+      overflow-y: auto;
+    }
+    .model-priority-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-sm);
+      padding: 10px 14px;
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-sm);
+      transition: background-color 120ms ease, border-color 120ms ease;
+    }
+    .model-priority-item:hover {
+      background-color: var(--bg-subtle);
+    }
+    .model-priority-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      flex: 1;
+    }
+    .model-priority-grip {
+      color: var(--text-secondary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: none;
+      opacity: 0.5;
+    }
+    .model-priority-num {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      min-width: 22px;
+      flex: none;
+    }
+    .model-priority-name {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .model-priority-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex: none;
+    }
+    .btn-icon-sm {
+      width: 28px;
+      height: 28px;
+      min-height: 28px;
+      padding: 0;
+      border-radius: var(--radius-sm);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background-color: transparent;
+      border: 1px solid transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 120ms ease;
+    }
+    .btn-icon-sm:hover:not(:disabled) {
+      background-color: var(--bg-hover);
+      color: var(--text-primary);
+      border-color: var(--border-control);
+    }
+    .btn-icon-sm.danger:hover:not(:disabled) {
+      background-color: var(--badge-error-bg);
+      color: var(--badge-error-text);
+      border-color: var(--badge-error-text);
+    }
+    .btn-icon-sm:disabled {
+      opacity: 0.25;
+      cursor: not-allowed;
+    }
+    .btn-icon-sm svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .model-add-dashed {
+      border: 1px dashed var(--border-control);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      background-color: transparent;
+      cursor: pointer;
+      width: 100%;
+      transition: all 120ms ease;
+    }
+    .model-add-dashed:hover:not(:disabled) {
+      border-color: var(--color-primary);
+      color: var(--text-primary);
+      background-color: var(--bg-subtle);
+    }
+    .model-add-dashed svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+    }
+    .model-add-box {
+      border: 1px dashed var(--border-control);
+      border-radius: var(--radius-sm);
+      padding: var(--space-sm);
+      background-color: var(--bg-subtle);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-xs);
+    }
+
+    @media (max-width: 640px) {
+      .model-priority-item {
+        padding: 10px 10px;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .model-priority-left {
+        gap: 6px;
+        min-width: 0;
+        width: 100%;
+      }
+      .model-priority-name {
+        font-size: 12px;
+        flex: 1;
+        min-width: 0;
+      }
+      .model-priority-num {
+        min-width: 18px;
+        font-size: 12px;
+      }
+      .model-priority-actions {
+        width: 100%;
+        justify-content: flex-end;
+        padding-top: 6px;
+        border-top: 1px dashed var(--border-subtle);
+        margin-top: 2px;
+      }
+      .btn-icon-sm {
+        width: 36px;
+        height: 36px;
+        min-height: 36px;
+      }
+      .model-add-box .btn-row {
+        width: 100%;
+      }
+      .model-add-box .btn-row .btn {
+        flex: 1;
+        min-height: 36px;
+      }
+    }
+
+    /* Daftar model per provider: tabel dengan pencarian dan pilihan satu klik */
+    .models-panel {
+      margin-top: var(--space-md);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-md);
+      background-color: var(--bg-surface);
+    }
+    @media (max-width: 600px) {
+      .models-panel-head {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .models-panel-head .text-input {
+        max-width: none;
+        width: 100%;
+      }
+      .models-table th,
+      .models-table td {
+        padding: 8px 10px;
+        font-size: 12px;
+      }
+    }
+    .models-panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-sm);
+      flex-wrap: wrap;
+      padding: var(--space-sm) var(--space-md);
+      border-bottom: 1px solid var(--border-hairline);
+    }
+    .models-panel-head .text-input {
+      max-width: 280px;
+      min-height: 32px;
+      height: 32px;
+    }
+    .models-scroll {
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    .models-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .models-table th,
+    .models-table td {
+      padding: 8px var(--space-md);
+      text-align: left;
+      border-bottom: 1px solid var(--border-hairline);
+    }
+    .models-table th {
+      position: sticky;
+      top: 0;
+      background-color: var(--bg-subtle);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary);
+    }
+    .models-table tr:last-child td {
+      border-bottom: none;
+    }
+    .models-table tr.is-selected td {
+      background-color: var(--bg-subtle);
+    }
+    .models-table td.model-action {
+      width: 1%;
+      white-space: nowrap;
+      text-align: right;
+    }
+
+    /* Saklar besar untuk status bot: posisi kenop dan warna jalur menandakan aktif atau mati */
+    .bot-switch {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+    }
+    .bot-switch-label {
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 20px;
+      letter-spacing: -0.28px;
+      min-width: 76px;
+      text-align: right;
+    }
+    .switch-toggle {
+      position: relative;
+      flex: none;
+      width: 48px;
+      height: 28px;
+      padding: 0;
+      border-radius: var(--radius-full);
+      border: 1px solid var(--border-control);
+      background-color: var(--bg-hover);
+      cursor: pointer;
+      transition: background-color 160ms ease, border-color 160ms ease;
+    }
+    .switch-toggle::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 20px;
+      height: 20px;
+      border-radius: var(--radius-full);
+      background-color: var(--text-secondary);
+      transition: transform 160ms ease, background-color 160ms ease;
+    }
+    .switch-toggle[aria-checked="true"] {
+      background-color: var(--color-primary);
+      border-color: var(--color-primary);
+    }
+    .switch-toggle[aria-checked="true"]::after {
+      transform: translateX(20px);
+      background-color: var(--on-primary);
+    }
+    .switch-toggle:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    /* Badge (badge-secondary: caption 12px/16px, rounded.full) */
     .badge {
       display: inline-flex;
       align-items: center;
-      padding: 3px 10px;
+      padding: 2px var(--space-xs);
       font-size: 12px;
-      font-weight: 600;
-      line-height: 1.4;
+      font-weight: 500;
+      line-height: 16px;
       border-radius: var(--radius-full);
       white-space: nowrap;
     }
@@ -572,7 +1026,7 @@
       color: var(--badge-neutral-text);
     }
 
-    /* Ringkasan Metrik Polos (bukan kartu di dalam kartu) */
+    /* Ringkasan Metrik Polos (caption-mono untuk label teknis) */
     .metrics-strip {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -580,7 +1034,7 @@
       padding: var(--space-md) 0;
       border-top: 1px solid var(--border-hairline);
       border-bottom: 1px solid var(--border-hairline);
-      margin-bottom: var(--space-xl);
+      margin-bottom: var(--space-lg);
     }
 
     @media (max-width: 900px) {
@@ -591,34 +1045,48 @@
 
     @media (max-width: 480px) {
       .metrics-strip {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px 10px;
+        padding: 12px 0;
+      }
+      .metric-value {
+        font-size: 18px;
+        line-height: 24px;
+        letter-spacing: -0.5px;
+      }
+      .metric-label {
+        font-size: 11px;
       }
     }
 
     .metric-item {
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: var(--space-xxs);
     }
 
     .metric-label {
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 1px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 16px;
       text-transform: uppercase;
       color: var(--text-secondary);
     }
 
     .metric-value {
-      font-size: 22px;
+      font-size: 24px;
       font-weight: 600;
-      font-family: var(--font-mono);
+      line-height: 32px;
+      letter-spacing: -0.96px;
+      font-family: var(--font-sans);
       word-break: break-word;
     }
 
     .metric-value-sm {
-      font-size: 14px;
-      font-weight: 500;
+      font-size: 13px;
+      font-weight: 400;
+      line-height: 20px;
       font-family: var(--font-mono);
       word-break: break-all;
     }
@@ -627,13 +1095,29 @@
     .wa-grid {
       display: grid;
       grid-template-columns: 280px 1fr;
-      gap: var(--space-xl);
+      gap: var(--space-lg);
       align-items: start;
     }
 
     @media (max-width: 767px) {
       .wa-grid {
         grid-template-columns: 1fr;
+        justify-items: center;
+        text-align: center;
+      }
+      .qr-box {
+        margin: 0 auto;
+        width: 220px;
+        height: 220px;
+      }
+      .pairing-code-display {
+        font-size: 16px;
+        letter-spacing: 1.5px;
+        padding: 6px 12px;
+        width: 100%;
+        max-width: 280px;
+        justify-content: center;
+        box-sizing: border-box;
       }
     }
 
@@ -646,9 +1130,10 @@
       align-items: center;
       justify-content: center;
       padding: var(--space-xs);
-      background-color: var(--bg-surface);
+      background-color: var(--bg-subtle);
       text-align: center;
       font-size: 13px;
+      line-height: 20px;
       color: var(--text-secondary);
     }
 
@@ -662,10 +1147,10 @@
       display: inline-flex;
       align-items: center;
       gap: var(--space-sm);
-      padding: var(--space-sm) var(--space-md);
+      padding: var(--space-xs) var(--space-md);
       background-color: var(--bg-subtle);
       border: 1px solid var(--border-control);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
       font-family: var(--font-mono);
       font-size: 20px;
       font-weight: 600;
@@ -673,7 +1158,7 @@
       margin-top: var(--space-sm);
     }
 
-    /* Daftar Provider & Key (dipisahkan garis, bukan kotak di dalam kotak) */
+    /* Daftar Provider & Key (dipisahkan garis hairline) */
     .provider-list {
       border-top: 1px solid var(--border-hairline);
     }
@@ -721,6 +1206,54 @@
       flex-wrap: wrap;
     }
 
+    @media (max-width: 767px) {
+      .provider-block {
+        padding: var(--space-md) 0;
+      }
+      .provider-top {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--space-xs);
+      }
+      .provider-title-group {
+        width: 100%;
+      }
+      .provider-top .btn-row {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .provider-top .btn-row .btn {
+        flex: 1 1 calc(50% - 4px);
+        min-height: 36px;
+        font-size: 12px;
+        padding: 0 8px;
+        justify-content: center;
+      }
+      .key-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--space-xs);
+        padding: 10px 0;
+      }
+      .key-info {
+        width: 100%;
+      }
+      .key-row .btn-row {
+        width: 100%;
+        display: flex;
+        gap: 6px;
+      }
+      .key-row .btn-row .btn {
+        flex: 1;
+        min-height: 34px;
+        font-size: 12px;
+        padding: 0 8px;
+        justify-content: center;
+      }
+    }
+
     /* Kotak Uji Coba Chat */
     .chat-transcript {
       min-height: 260px;
@@ -733,7 +1266,24 @@
       display: flex;
       flex-direction: column;
       gap: var(--space-md);
-      background-color: var(--bg-page);
+      background-color: var(--bg-subtle);
+    }
+
+    @media (max-width: 767px) {
+      .chat-transcript {
+        min-height: 180px;
+        max-height: 340px;
+        padding: 10px;
+        gap: 10px;
+      }
+      .chat-bubble {
+        font-size: 13px;
+        line-height: 19px;
+      }
+      .chat-meta {
+        font-size: 11px;
+        gap: 4px;
+      }
     }
 
     .chat-item {
@@ -745,8 +1295,10 @@
     }
 
     .chat-role {
+      font-family: var(--font-mono);
       font-size: 12px;
-      font-weight: 600;
+      font-weight: 400;
+      line-height: 16px;
       color: var(--text-secondary);
       margin-bottom: 4px;
     }
@@ -755,6 +1307,8 @@
       white-space: pre-wrap;
       word-break: break-word;
       font-size: 14px;
+      line-height: 20px;
+      letter-spacing: -0.28px;
     }
 
     .chat-meta {
@@ -764,14 +1318,17 @@
       gap: var(--space-xs);
       flex-wrap: wrap;
       font-size: 12px;
+      line-height: 16px;
       color: var(--text-secondary);
     }
 
-    /* Tabel Log & Audit */
+    /* Tabel Log & Audit (ex-data-table-cell: header caption-mono uppercase, body body-sm) */
     .comparison-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 13px;
+      font-size: 14px;
+      line-height: 20px;
+      letter-spacing: -0.28px;
       background-color: var(--bg-surface);
       border: 1px solid var(--border-hairline);
       border-radius: var(--radius-md);
@@ -780,18 +1337,19 @@
 
     .comparison-table th {
       text-align: left;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 1px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 16px;
       text-transform: uppercase;
       color: var(--text-secondary);
-      padding: var(--space-sm) var(--space-md);
+      padding: var(--space-xs) var(--space-sm);
       border-bottom: 1px solid var(--border-hairline);
       background-color: var(--bg-subtle);
     }
 
     .comparison-table td {
-      padding: var(--space-sm) var(--space-md);
+      padding: var(--space-xs) var(--space-sm);
       border-bottom: 1px solid var(--border-hairline);
       vertical-align: top;
       word-break: break-word;
@@ -810,42 +1368,161 @@
       .comparison-table tr {
         display: block;
       }
+      .comparison-table {
+        background-color: transparent;
+        border: none;
+      }
       .comparison-table thead {
         display: none;
       }
+      .comparison-table tbody {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
       .comparison-table tr {
-        padding: var(--space-sm) var(--space-md);
-        border-bottom: 1px solid var(--border-hairline);
+        padding: 12px;
+        border: 1px solid var(--border-hairline);
+        border-radius: var(--radius-sm);
+        background-color: var(--bg-surface);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
       }
       .comparison-table td {
-        padding: 4px 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 6px 0;
         border: none;
+        border-bottom: 1px dashed var(--border-subtle);
+        font-size: 13px;
+        line-height: 18px;
+      }
+      .comparison-table td:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
       }
       .comparison-table td::before {
-        content: attr(data-label) ": ";
-        font-weight: 600;
+        content: attr(data-label);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: uppercase;
         color: var(--text-secondary);
+        letter-spacing: 0.04em;
+        flex: none;
+        min-width: 68px;
       }
     }
 
-    /* Skeleton & Empty State */
-    .skeleton-line {
-      height: 18px;
-      background-color: var(--bg-subtle);
+    /* Terminal Console Log Realtime */
+    .console-terminal-card {
+      margin-bottom: var(--space-md);
+    }
+    .console-terminal {
+      background-color: #08090d;
+      border: 1px solid var(--border-subtle);
       border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.6;
+      height: 320px;
+      overflow-y: auto;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .console-line {
+      display: flex;
+      gap: 8px;
+      align-items: baseline;
+      word-break: break-all;
+    }
+    .console-time {
+      color: #64748b;
+      flex: none;
+      font-variant-numeric: tabular-nums;
+    }
+    .console-tag {
+      flex: none;
+      font-weight: 600;
+      font-size: 11px;
+      padding: 0 4px;
+      border-radius: 2px;
+    }
+    .console-tag.info {
+      color: #38bdf8;
+      background-color: rgba(56, 189, 248, 0.12);
+    }
+    .console-tag.success {
+      color: #4ade80;
+      background-color: rgba(74, 222, 128, 0.12);
+    }
+    .console-tag.warn {
+      color: #fbbf24;
+      background-color: rgba(251, 191, 36, 0.12);
+    }
+    .console-tag.error {
+      color: #f87171;
+      background-color: rgba(248, 113, 113, 0.15);
+    }
+    .console-msg {
+      color: #e2e8f0;
+      flex: 1;
+    }
+    .console-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background-color: #22c55e;
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+      margin-right: 4px;
+    }
+    @media (max-width: 600px) {
+      .console-terminal {
+        height: 250px;
+        padding: 8px 10px;
+        font-size: 11px;
+      }
+      .console-line {
+        flex-wrap: wrap;
+        gap: 2px 6px;
+      }
+      .console-time {
+        font-size: 10px;
+      }
+      .console-tag {
+        font-size: 10px;
+        padding: 0 3px;
+      }
+      .console-msg {
+        width: 100%;
+        font-size: 11px;
+      }
+    }
+
+    /* Skeleton & Empty State (ex-empty-state-card) */
+    .skeleton-line {
+      height: 16px;
+      background-color: var(--bg-subtle);
+      border-radius: var(--radius-xs);
       margin-bottom: var(--space-xs);
     }
 
     .empty-state {
-      padding: var(--space-xl);
+      padding: var(--space-3xl) var(--space-lg);
       text-align: center;
+      background-color: var(--bg-subtle);
       color: var(--text-secondary);
-      font-size: 14px;
-      border: 1px dashed var(--border-control);
-      border-radius: var(--radius-md);
+      font-size: 16px;
+      line-height: 24px;
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-lg);
     }
 
-    /* Modal & Toast */
+    /* Modal (ex-modal-card) & Toast (ex-toast) */
     .modal-backdrop {
       position: fixed;
       inset: 0;
@@ -883,12 +1560,54 @@
     .toast-item {
       background-color: var(--bg-elevated);
       color: var(--text-primary);
-      border: 1px solid var(--border-control);
+      border: 1px solid var(--border-hairline);
       border-radius: var(--radius-md);
       padding: var(--space-sm) var(--space-md);
-      box-shadow: var(--shadow-modal);
+      box-shadow: var(--shadow-toast);
       font-size: 14px;
-      font-weight: 500;
+      font-weight: 400;
+      line-height: 20px;
+      letter-spacing: -0.28px;
+    }
+
+    @media (max-width: 480px) {
+      .modal-backdrop {
+        padding: 10px;
+      }
+      .modal-box {
+        padding: 18px 14px;
+        border-radius: var(--radius-md);
+        max-height: 88dvh;
+      }
+      .modal-box .card-title {
+        font-size: 18px;
+        line-height: 24px;
+      }
+      .modal-box .card-desc {
+        font-size: 13px;
+        line-height: 18px;
+      }
+      .modal-box .btn-row {
+        flex-direction: column-reverse;
+        gap: 8px;
+        width: 100%;
+      }
+      .modal-box .btn-row .btn {
+        width: 100%;
+        min-height: 40px;
+      }
+      .toast-region {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        max-width: none;
+      }
+      .toast-item {
+        width: 100%;
+        box-sizing: border-box;
+        font-size: 13px;
+        padding: 10px 12px;
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -931,7 +1650,7 @@
           <span id="header-bot-badge" class="badge badge-neutral">Memuat</span>
         </div>
         <div class="header-actions">
-          <button id="theme-toggle-btn" type="button" class="btn btn-secondary btn-sm">Tema</button>
+          <button id="theme-toggle-btn" type="button" class="btn btn-secondary btn-sm btn-icon" aria-label="Ganti tema" title="Ganti tema"></button>
           <button id="logout-admin-btn" type="button" class="btn btn-secondary btn-sm">Keluar</button>
         </div>
       </div>
@@ -982,12 +1701,54 @@
         modelsList: [],
         logs: [],
         audit: [],
+        consoleLogs: [],
+        consoleLastId: 0,
+        consoleTimer: null,
         chatHistory: [],
         summaryTimer: null,
         revealClearTimer: null
       };
 
       /* Helper DOM berbasis createElement dan textContent */
+      function createSvgIcon(type) {
+        var NS = 'http://www.w3.org/2000/svg';
+        var svg = document.createElementNS(NS, 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('aria-hidden', 'true');
+        if (type === 'up') {
+          var p1 = document.createElementNS(NS, 'path');
+          p1.setAttribute('d', 'M12 19V5M5 12l7-7 7 7');
+          svg.appendChild(p1);
+        } else if (type === 'down') {
+          var p2 = document.createElementNS(NS, 'path');
+          p2.setAttribute('d', 'M12 5v14M5 12l7 7 7-7');
+          svg.appendChild(p2);
+        } else if (type === 'close') {
+          var p3 = document.createElementNS(NS, 'path');
+          p3.setAttribute('d', 'M18 6L6 18M6 6l12 12');
+          svg.appendChild(p3);
+        } else if (type === 'plus') {
+          var p4 = document.createElementNS(NS, 'path');
+          p4.setAttribute('d', 'M12 5v14M5 12h14');
+          svg.appendChild(p4);
+        } else if (type === 'trash') {
+          var pTrash = document.createElementNS(NS, 'path');
+          pTrash.setAttribute('d', 'M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2');
+          svg.appendChild(pTrash);
+        } else if (type === 'grip') {
+          var coords = [[9, 6], [9, 12], [9, 18], [15, 6], [15, 12], [15, 18]];
+          for (var i = 0; i < coords.length; i++) {
+            var dot = document.createElementNS(NS, 'circle');
+            dot.setAttribute('cx', String(coords[i][0]));
+            dot.setAttribute('cy', String(coords[i][1]));
+            dot.setAttribute('r', '1.5');
+            dot.setAttribute('fill', 'currentColor');
+            dot.setAttribute('stroke', 'none');
+            svg.appendChild(dot);
+          }
+        }
+        return svg;
+      }
       function clearEl(node) {
         while (node.firstChild) {
           node.removeChild(node.firstChild);
@@ -1059,7 +1820,30 @@
       function updateThemeButtonLabel() {
         var btn = document.getElementById('theme-toggle-btn');
         if (!btn) return;
-        btn.textContent = getCurrentTheme() === 'dark' ? 'Mode Terang' : 'Mode Gelap';
+        var dark = getCurrentTheme() === 'dark';
+        var label = dark ? 'Beralih ke mode terang' : 'Beralih ke mode gelap';
+        btn.setAttribute('aria-label', label);
+        btn.setAttribute('title', label);
+        clearEl(btn);
+        var NS = 'http://www.w3.org/2000/svg';
+        var svg = document.createElementNS(NS, 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('aria-hidden', 'true');
+        function add(tag, attrs) {
+          var node = document.createElementNS(NS, tag);
+          Object.keys(attrs).forEach(function (key) { node.setAttribute(key, attrs[key]); });
+          svg.appendChild(node);
+        }
+        if (dark) {
+          /* Ikon matahari: menandakan tombol akan beralih ke mode terang */
+          add('circle', { cx: '12', cy: '12', r: '4' });
+          ['M12 2v2', 'M12 20v2', 'M4.93 4.93l1.41 1.41', 'M17.66 17.66l1.41 1.41', 'M2 12h2', 'M20 12h2', 'M6.34 17.66l-1.41 1.41', 'M19.07 4.93l-1.41 1.41'].forEach(function (d) {
+            add('path', { d: d });
+          });
+        } else {
+          add('path', { d: 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z' });
+        }
+        btn.appendChild(svg);
       }
 
       function toggleTheme() {
@@ -1269,9 +2053,87 @@
         }, 5000);
       }
 
+      function stopConsoleAutoRefresh() {
+        if (state.consoleTimer) {
+          clearInterval(state.consoleTimer);
+          state.consoleTimer = null;
+        }
+      }
+
+      function startConsoleAutoRefresh() {
+        stopConsoleAutoRefresh();
+        state.consoleTimer = setInterval(function () {
+          if (state.activeTab === 'log' && document.visibilityState === 'visible') {
+            pollConsoleSilent();
+            pollLogsSilent();
+          }
+        }, 2000);
+      }
+
+      function pollLogsSilent() {
+        if (state.activeTab !== 'log') return;
+        apiFetch('/api/logs')
+          .then(function (res) {
+            if (state.activeTab !== 'log') return;
+            var newLogs = Array.isArray(res) ? res : ((res && res.logs) || []);
+            var hasChanged = false;
+            if (newLogs.length !== state.logs.length) {
+              hasChanged = true;
+            } else if (newLogs.length > 0) {
+              if (newLogs[0].id !== (state.logs[0] && state.logs[0].id) ||
+                  newLogs[newLogs.length - 1].id !== (state.logs[state.logs.length - 1] && state.logs[state.logs.length - 1].id)) {
+                hasChanged = true;
+              }
+            }
+            if (hasChanged) {
+              state.logs = newLogs;
+              var tableContainer = document.getElementById('activity-logs-container');
+              if (tableContainer) {
+                renderActivityLogsTable(tableContainer);
+              }
+              var clearBtn = document.getElementById('clear-logs-btn');
+              if (clearBtn) {
+                clearBtn.disabled = state.logs.length === 0;
+              }
+            }
+          })
+          .catch(function () {});
+      }
+
+      function pollConsoleSilent() {
+        var terminal = document.querySelector('.console-terminal');
+        apiFetch('/api/console?since=' + (state.consoleLastId || 0))
+          .then(function (res) {
+            if (state.activeTab !== 'log') return;
+            var items = (res && res.logs) || [];
+            if (items.length > 0) {
+              var isFirst = state.consoleLogs.length === 0;
+              if (isFirst && terminal) {
+                clearEl(terminal);
+              }
+              var isAtBottom = terminal ? (terminal.scrollTop + terminal.clientHeight >= terminal.scrollHeight - 40) : true;
+              for (var i = 0; i < items.length; i++) {
+                var it = items[i];
+                state.consoleLogs.push(it);
+                if (it.id > state.consoleLastId) {
+                  state.consoleLastId = it.id;
+                }
+                if (terminal) {
+                  appendConsoleLine(terminal, it);
+                }
+              }
+              if (terminal && isAtBottom) {
+                terminal.scrollTop = terminal.scrollHeight;
+              }
+            }
+          })
+          .catch(function () {});
+      }
+
       function switchTab(tabId) {
         state.activeTab = tabId;
         stopSummaryAutoRefresh();
+        stopConsoleAutoRefresh();
         renderTabsNav();
         var container = document.getElementById('tab-content');
         if (!container) return;
@@ -1293,6 +2155,7 @@
           renderUjiCobaTab(container);
         } else if (tabId === 'log') {
           loadLogTab(container);
+          startConsoleAutoRefresh();
         }
       }
 
@@ -1432,39 +2295,54 @@
         ]);
 
         /* Saklar Bot */
+        var botDesc = el('p', { className: 'card-desc' });
+        var botLabel = el('span', { className: 'bot-switch-label' });
         var botToggleBtn = el('button', {
           type: 'button',
-          className: st.botEnabled ? 'btn btn-secondary' : 'btn btn-primary',
-          textContent: st.botEnabled ? 'Matikan Bot' : 'Aktifkan Bot',
-          onClick: function () {
-            botToggleBtn.disabled = true;
-            apiFetch('/api/bot/toggle', { method: 'POST', body: { enabled: !st.botEnabled } })
-              .then(function (res) {
-                state.status.botEnabled = Boolean(res.botEnabled);
-                if (state.settings) state.settings.bot_enabled = Boolean(res.botEnabled);
-                updateHeaderBadge();
-                showToast(res.botEnabled ? 'Bot diaktifkan.' : 'Bot dinonaktifkan.');
-                renderSummaryTab(container);
-              })
-              .catch(function (err) {
-                botToggleBtn.disabled = false;
-                showToast(err.message || 'Gagal mengubah saklar bot.');
-              });
-          }
+          role: 'switch',
+          className: 'switch-toggle',
+          'aria-label': 'Balasan otomatis bot'
+        });
+
+        function paintBotSwitch(on) {
+          botToggleBtn.setAttribute('aria-checked', on ? 'true' : 'false');
+          botLabel.textContent = on ? 'Aktif' : 'Nonaktif';
+          botDesc.textContent = on
+            ? 'Bot sedang aktif membalas pesan WhatsApp yang masuk.'
+            : 'Bot sedang dinonaktifkan sementara.';
+        }
+        paintBotSwitch(Boolean(st.botEnabled));
+
+        botToggleBtn.addEventListener('click', function () {
+          var previous = botToggleBtn.getAttribute('aria-checked') === 'true';
+          var next = !previous;
+          /* Tampilan langsung berubah agar respons terasa instan, dikembalikan jika server menolak */
+          paintBotSwitch(next);
+          botToggleBtn.disabled = true;
+          apiFetch('/api/bot/toggle', { method: 'POST', body: { enabled: next } })
+            .then(function (res) {
+              var confirmed = Boolean(res.botEnabled);
+              state.status.botEnabled = confirmed;
+              if (state.settings) state.settings.bot_enabled = confirmed;
+              paintBotSwitch(confirmed);
+              updateHeaderBadge();
+            })
+            .catch(function (err) {
+              paintBotSwitch(previous);
+              showToast(err.message || 'Gagal mengubah saklar bot.');
+            })
+            .finally(function () {
+              botToggleBtn.disabled = false;
+            });
         });
 
         var botCard = el('section', { className: 'card-base' }, [
-          el('div', { className: 'card-header', style: 'margin-bottom: 0;' }, [
+          el('div', { className: 'card-header', style: 'margin-bottom: 0; align-items: center;' }, [
             el('div', null, [
               el('h2', { className: 'card-title', textContent: 'Status Balasan Otomatis' }),
-              el('p', {
-                className: 'card-desc',
-                textContent: st.botEnabled
-                  ? 'Bot sedang aktif membalas pesan WhatsApp yang masuk.'
-                  : 'Bot sedang dinonaktifkan sementara.'
-              })
+              botDesc
             ]),
-            botToggleBtn
+            el('div', { className: 'bot-switch' }, [botLabel, botToggleBtn])
           ])
         ]);
 
@@ -1981,52 +2859,13 @@
         return { text: 'Belum dites', cls: 'badge-neutral' };
       }
 
-      function getStrategyDescription(strategy) {
-        if (strategy === 'round_robin') {
-          return 'Membagi panggilan secara bergiliran di antara semua provider sehat yang memiliki model default.';
-        }
-        if (strategy === 'priority') {
-          return 'Selalu mengutamakan provider sehat dengan angka prioritas terkecil, lalu beralih ke urutan berikutnya jika gagal.';
-        }
-        return 'Menggunakan model utama dan daftar model cadangan yang diatur manual pada tab Model.';
-      }
-
       function renderProviderTab(container) {
         clearEl(container);
-        var pData = state.providersData || { providers: [], maxProviders: 5, maxKeysPerProvider: 20, serverNow: Date.now() };
+        var pData = state.providersData || { providers: [], maxProviders: 5, maxKeysPerProvider: 5, serverNow: Date.now() };
         var providers = pData.providers || [];
         var maxProv = pData.maxProviders || 5;
-        var maxKeys = pData.maxKeysPerProvider || 20;
+        var maxKeys = pData.maxKeysPerProvider || 5;
         var serverNow = pData.serverNow || Date.now();
-        var currentStrategy = (state.settings && state.settings.llm_strategy) || 'manual';
-
-        /* Pemilih Mode Penggunaan */
-        var strategyDesc = el('p', {
-          className: 'field-hint',
-          textContent: getStrategyDescription(currentStrategy)
-        });
-
-        var strategySelect = el('select', {
-          id: 'provider-strategy-select',
-          className: 'select-input',
-          onChange: function () {
-            var val = strategySelect.value;
-            strategyDesc.textContent = getStrategyDescription(val);
-            apiFetch('/api/settings', { method: 'PUT', body: { llm_strategy: val } })
-              .then(function (res) {
-                state.settings = res.settings;
-                showToast('Mode penggunaan LLM diperbarui.');
-              })
-              .catch(function (err) {
-                showToast(err.message || 'Gagal mengubah mode penggunaan.');
-              });
-          }
-        }, [
-          el('option', { value: 'manual', selected: currentStrategy === 'manual', textContent: 'manual - Pilih model utama dan fallback dari tab Model' }),
-          el('option', { value: 'round_robin', selected: currentStrategy === 'round_robin', textContent: 'round_robin - Bergiliran antar provider aktif' }),
-          el('option', { value: 'priority', selected: currentStrategy === 'priority', textContent: 'priority - Urutkan berdasarkan angka prioritas provider' })
-        ]);
-
         /* Tombol Tes Semua Key */
         var testAllStatus = el('span', { className: 'field-hint' });
         var testAllBtn = el('button', {
@@ -2088,7 +2927,7 @@
             el('div', {
               className: 'empty-state',
               style: 'margin-top: 16px;',
-              textContent: 'Belum ada provider LLM. Klik tombol "Tambah provider" di atas untuk menambahkan endpoint OpenAI-compatible.'
+              textContent: 'Belum ada provider LLM. Klik "Tambah provider", pilih format OpenAI-compatible atau Anthropic, lalu isi Base URL dan API key.'
             })
           );
         } else {
@@ -2115,11 +2954,6 @@
               addProviderBtn
             ])
           ]),
-          el('div', { className: 'field-group' }, [
-            el('label', { className: 'field-label', for: 'provider-strategy-select', textContent: 'Mode penggunaan' }),
-            strategySelect,
-            strategyDesc
-          ]),
           listWrap
         ]);
 
@@ -2141,21 +2975,10 @@
           value: p.baseUrl,
           readOnly: hasKeys
         });
-        var modelInput = el('input', {
-          type: 'text',
-          className: 'text-input mono',
-          list: 'global-models-datalist',
-          value: p.model || '',
-          placeholder: 'Contoh: gpt-4o-mini'
-        });
-        var prioInput = el('input', {
-          type: 'number',
-          className: 'text-input mono',
-          min: '-1000',
-          max: '1000',
-          value: String(p.priority)
-        });
-
+        var formatInput = el('select', { className: 'select-input' }, [
+          el('option', { value: 'openai', selected: p.format !== 'anthropic', textContent: 'OpenAI-compatible' }),
+          el('option', { value: 'anthropic', selected: p.format === 'anthropic', textContent: 'Anthropic' })
+        ]);
         var toggleInput = el('input', {
           type: 'checkbox',
           className: 'switch-input',
@@ -2185,8 +3008,7 @@
             inlineFeedback.className = 'hidden';
             var payload = {
               name: nameInput.value.trim(),
-              model: modelInput.value.trim(),
-              priority: Number.parseInt(prioInput.value, 10) || 0
+              format: formatInput.value
             };
             if (!hasKeys) {
               payload.baseUrl = urlInput.value.trim();
@@ -2229,6 +3051,67 @@
           }
         });
 
+        var modelsPanel = el('div', { className: 'hidden' });
+
+        function renderModelsPanel(list) {
+          clearEl(modelsPanel);
+          if (!list.length) {
+            modelsPanel.className = 'hidden';
+            return;
+          }
+          modelsPanel.className = 'models-panel';
+          var tbody = el('tbody');
+          var searchInp = el('input', {
+            type: 'search',
+            className: 'text-input mono',
+            placeholder: 'Cari model...',
+            'aria-label': 'Cari model'
+          });
+          var countLabel = el('span', { className: 'field-hint' });
+
+          function paintRows() {
+            var q = searchInp.value.trim().toLowerCase();
+            clearEl(tbody);
+            var shown = 0;
+            list.forEach(function (name, idx) {
+              if (q && name.toLowerCase().indexOf(q) === -1) return;
+              shown++;
+              tbody.appendChild(
+                el('tr', null, [
+                  el('td', { className: 'mono', textContent: String(idx + 1) }),
+                  el('td', { className: 'mono', textContent: name })
+                ])
+              );
+            });
+            countLabel.textContent = shown + ' dari ' + list.length + ' model';
+            if (shown === 0) {
+              tbody.appendChild(
+                el('tr', null, [el('td', { colSpan: '2', className: 'field-hint', textContent: 'Tidak ada model yang cocok.' })])
+              );
+            }
+          }
+
+          searchInp.addEventListener('input', paintRows);
+          paintRows();
+
+          modelsPanel.appendChild(el('div', { className: 'models-panel-head' }, [
+            el('strong', { textContent: 'Model tersedia' }),
+            countLabel,
+            searchInp
+          ]));
+          modelsPanel.appendChild(el('div', { className: 'models-scroll' }, [
+            el('table', { className: 'models-table' }, [
+              el('thead', null, [
+                el('tr', null, [
+                  el('th', { textContent: 'No' }),
+                  el('th', { textContent: 'Model' })
+                ])
+              ]),
+              tbody
+            ])
+          ]));
+        }
+
         var viewModelsBtn = el('button', {
           type: 'button',
           className: 'btn btn-secondary btn-sm',
@@ -2237,16 +3120,18 @@
             viewModelsBtn.disabled = true;
             inlineFeedback.className = 'field-hint';
             inlineFeedback.textContent = 'Memuat daftar model dari ' + p.name + '...';
+            clearEl(modelsPanel);
+            modelsPanel.className = 'hidden';
             apiFetch('/api/providers/' + p.id + '/models')
               .then(function (res) {
                 var list = Array.isArray(res.models) ? res.models : [];
                 if (res.error) {
                   inlineFeedback.className = 'field-warn';
-                  inlineFeedback.textContent = 'Peringatan model (' + res.error + '): ' + (list.length ? list.join(', ') : 'kosong');
+                  inlineFeedback.textContent = 'Peringatan model (' + res.error + '). ' + (list.length ? 'Menampilkan model tersimpan.' : 'Daftar kosong.');
                 } else {
-                  inlineFeedback.className = 'field-success';
-                  inlineFeedback.textContent = 'Model tersedia (' + list.length + '): ' + (list.slice(0, 25).join(', ') || 'kosong');
+                  inlineFeedback.className = 'hidden';
                 }
+                renderModelsPanel(list);
                 state.modelsList = [{ provider: p.name, models: list }];
                 populateGlobalModelsDatalist();
               })
@@ -2272,6 +3157,7 @@
               danger: true,
               onConfirm: function () {
                 return apiFetch('/api/providers/' + p.id, { method: 'DELETE' }).then(function () {
+                  state.modelsList = [];
                   showToast('Provider dihapus.');
                   loadProviderTab(container);
                 });
@@ -2296,7 +3182,7 @@
             el('p', {
               className: 'field-hint',
               style: 'padding: 8px 0;',
-              textContent: 'Belum ada API key (mode lokal tanpa autentikasi atau tambahkan key baru).'
+              textContent: 'Belum ada API key. Tambahkan key agar provider dapat dipakai.'
             })
           );
         } else {
@@ -2310,6 +3196,10 @@
             el('div', { className: 'provider-title-group' }, [
               toggleInput,
               el('strong', { className: 'mono', textContent: p.name }),
+              el('span', {
+                className: 'badge badge-neutral',
+                textContent: p.format === 'anthropic' ? 'Anthropic' : 'OpenAI'
+              }),
               el('span', {
                 className: 'badge ' + (p.enabled ? 'badge-success' : 'badge-neutral'),
                 textContent: p.enabled ? 'Aktif' : 'Nonaktif'
@@ -2329,21 +3219,19 @@
               nameInput
             ]),
             el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', textContent: 'Format API' }),
+              formatInput
+            ]),
+            el('div', { className: 'field-group' }, [
               el('label', { className: 'field-label', textContent: 'Base URL' }),
               urlInput,
               hasKeys
                 ? el('p', { className: 'field-hint', textContent: 'Hapus semua key dulu untuk mengubah Base URL.' })
                 : null
-            ]),
-            el('div', { className: 'field-group' }, [
-              el('label', { className: 'field-label', textContent: 'Model Default & Prioritas' }),
-              el('div', { className: 'btn-row', style: 'flex-wrap: nowrap;' }, [
-                el('div', { style: 'flex: 1;' }, [modelInput]),
-                el('div', { style: 'width: 96px;' }, [prioInput])
-              ])
             ])
           ]),
           inlineFeedback,
+          modelsPanel,
           keysWrap
         ]);
       }
@@ -2443,9 +3331,12 @@
       function openAddProviderModal(container) {
         var nameInp = el('input', { type: 'text', className: 'text-input mono', placeholder: 'contoh: groq' });
         var urlInp = el('input', { type: 'url', className: 'text-input mono', placeholder: 'https://api.groq.com/openai/v1' });
-        var modelInp = el('input', { type: 'text', className: 'text-input mono', placeholder: 'llama-3.3-70b-versatile' });
-        var prioInp = el('input', { type: 'number', className: 'text-input mono', value: '0', min: '-1000', max: '1000' });
-        var keyInp = el('input', { type: 'password', className: 'text-input mono', placeholder: 'Opsional untuk tombol Tes dulu' });
+        var keyInp = el('input', { type: 'password', className: 'text-input mono', placeholder: 'Wajib diisi, contoh: sk-...' });
+        var keyLabelInp = el('input', { type: 'text', className: 'text-input', placeholder: 'key-1' });
+        var formatSelect = el('select', { className: 'select-input' }, [
+          el('option', { value: 'openai', textContent: 'OpenAI-compatible (/chat/completions)' }),
+          el('option', { value: 'anthropic', textContent: 'Anthropic (/messages)' })
+        ]);
         var feedback = el('div', { className: 'hidden' });
 
         var testFirstBtn = el('button', {
@@ -2460,8 +3351,8 @@
               method: 'POST',
               body: {
                 baseUrl: urlInp.value.trim(),
-                apiKey: keyInp.value.trim(),
-                model: modelInp.value.trim()
+                format: formatSelect.value,
+                apiKey: keyInp.value.trim()
               }
             })
               .then(function (res) {
@@ -2483,6 +3374,11 @@
           className: 'btn btn-primary',
           textContent: 'Simpan',
           onClick: function () {
+            if (!keyInp.value.trim()) {
+              feedback.className = 'field-error';
+              feedback.textContent = 'API key wajib diisi untuk menambah provider.';
+              return;
+            }
             saveBtn.disabled = true;
             feedback.className = 'hidden';
             apiFetch('/api/providers', {
@@ -2490,8 +3386,9 @@
               body: {
                 name: nameInp.value.trim(),
                 baseUrl: urlInp.value.trim(),
-                model: modelInp.value.trim(),
-                priority: Number.parseInt(prioInp.value, 10) || 0
+                format: formatSelect.value,
+                apiKey: keyInp.value.trim(),
+                keyLabel: keyLabelInp.value.trim()
               }
             })
               .then(function () {
@@ -2514,23 +3411,24 @@
             nameInp
           ]),
           el('div', { className: 'field-group' }, [
+            el('label', { className: 'field-label', textContent: 'Format API' }),
+            formatSelect
+          ]),
+          el('div', { className: 'field-group' }, [
             el('label', { className: 'field-label', textContent: 'Base URL' }),
             urlInp
           ]),
           el('div', { className: 'form-grid-2' }, [
             el('div', { className: 'field-group' }, [
-              el('label', { className: 'field-label', textContent: 'Model Default' }),
-              modelInp
+              el('label', { className: 'field-label', textContent: 'API Key (wajib)' }),
+              keyInp
             ]),
             el('div', { className: 'field-group' }, [
-              el('label', { className: 'field-label', textContent: 'Prioritas (-1000 s/d 1000)' }),
-              prioInp
+              el('label', { className: 'field-label', textContent: 'Label Key (opsional)' }),
+              keyLabelInp
             ])
           ]),
-          el('div', { className: 'field-group' }, [
-            el('label', { className: 'field-label', textContent: 'API Key Uji Coba (opsional untuk Tes dulu)' }),
-            keyInp
-          ]),
+          el('p', { className: 'field-hint', textContent: 'Anda dapat menambah hingga 5 API key pada provider ini setelah disimpan.' }),
           feedback,
           el('div', { className: 'btn-row', style: 'justify-content: flex-end; margin-top: 16px;' }, [
             el('button', { type: 'button', className: 'btn btn-secondary', textContent: 'Batal', onClick: closeModal }),
@@ -2560,7 +3458,7 @@
               body: {
                 providerId: provider.id,
                 baseUrl: provider.baseUrl,
-                model: provider.model,
+                format: provider.format,
                 apiKey: keyInp.value.trim()
               }
             })
@@ -2627,7 +3525,13 @@
       }
 
       function openRevealKeyModal(k) {
-        var passInp = el('input', { type: 'password', className: 'text-input mono', autocomplete: 'off' });
+        var passInp = el('input', {
+          type: 'password',
+          className: 'text-input mono',
+          autocomplete: 'current-password',
+          placeholder: 'Token admin'
+        });
+        passInp.value = getToken();
         var feedback = el('div', { className: 'hidden' });
         var plainHolder = el('div');
 
@@ -2672,10 +3576,10 @@
           el('p', {
             className: 'card-desc',
             style: 'margin-bottom: 16px;',
-            textContent: 'Masukkan REVEAL_PASSWORD server. Key otomatis dihapus dari layar setelah 30 detik atau saat jendela ditutup.'
+            textContent: 'Masukkan token admin untuk melihat API key. Key otomatis dihapus dari layar setelah 30 detik atau saat jendela ditutup.'
           }),
           el('div', { className: 'field-group' }, [
-            el('label', { className: 'field-label', textContent: 'Password Reveal' }),
+            el('label', { className: 'field-label', textContent: 'Token Admin' }),
             passInp
           ]),
           feedback,
@@ -2693,29 +3597,36 @@
       function renderModelTab(container) {
         clearEl(container);
         var s = state.settings;
-        var isManual = s.llm_strategy === 'manual';
         var dirtyBadge = el('span', { className: 'badge badge-warn hidden', textContent: 'Belum disimpan' });
         var errorBanner = el('div', { className: 'field-error hidden', role: 'alert' });
         var pingResultBox = el('div', { className: 'hidden' });
 
-        var modelInp = el('input', {
-          id: 'model-primary-input',
-          type: 'text',
-          className: 'text-input mono',
-          list: 'global-models-datalist',
-          disabled: !isManual,
-          value: s.model || '',
-          placeholder: 'Contoh: default/gpt-4o-mini'
-        });
+        /* Otomatis muat daftar model dari provider jika belum ada */
+        if (!state.modelsList || state.modelsList.length === 0) {
+          apiFetch('/api/models')
+            .then(function (list) {
+              state.modelsList = Array.isArray(list) ? list : [];
+              populateGlobalModelsDatalist();
+            })
+            .catch(function () {});
+        }
 
-        var fallbackInp = el('textarea', {
-          id: 'model-fallback-input',
-          className: 'textarea-input mono',
-          rows: '4',
-          disabled: !isManual,
-          placeholder: 'Satu model per baris (format namaProvider/namaModel)'
-        });
-        fallbackInp.value = Array.isArray(s.fallback_models) ? s.fallback_models.join('\n') : '';
+        /* Urutan model: indeks 0 adalah Model Utama, indeks 1..19 adalah Model Cadangan */
+        var modelList = [];
+        if (s.model && s.model.trim()) {
+          modelList.push(s.model.trim());
+        }
+        if (Array.isArray(s.fallback_models)) {
+          for (var i = 0; i < s.fallback_models.length; i++) {
+            var fm = s.fallback_models[i].trim();
+            if (fm && modelList.indexOf(fm) === -1) {
+              modelList.push(fm);
+            }
+          }
+        }
+        if (modelList.length > 20) {
+          modelList = modelList.slice(0, 20);
+        }
 
         var tempInp = el('input', {
           id: 'model-temp-input',
@@ -2745,13 +3656,40 @@
           value: String(s.history_turns)
         });
 
+        var modeSelect = el('select', {
+          id: 'model-mode-input',
+          className: 'select-input'
+        }, [
+          el('option', { value: 'fallback', textContent: 'Fallback (Prioritas urut nomor 1 ke bawah)' }),
+          el('option', { value: 'round_robin', textContent: 'Round Robin (Bergiliran tiap pesan masuk)' }),
+          el('option', { value: 'fusion', textContent: 'Fusion (Sintesis paralel dari beberapa model)' })
+        ]);
+        modeSelect.value = s.model_mode || 'fallback';
+
+        var modeHint = el('div', { className: 'field-hint', style: 'margin-top: 4px;' });
+        function updateModeHint() {
+          var v = modeSelect.value;
+          if (v === 'round_robin') {
+            modeHint.textContent = 'Mode Round Robin: Model nomor 1 sampai N dipanggil bergiliran untuk meratakan beban. Jika model terpilih gagal, otomatis beralih ke model berikutnya.';
+          } else if (v === 'fusion') {
+            modeHint.textContent = 'Mode Fusion: Pertanyaan dikirim bersamaan ke beberapa model teratas secara paralel, lalu hasilnya disintesis oleh model utama menjadi satu jawaban terbaik.';
+          } else {
+            modeHint.textContent = 'Mode Fallback: Model dipanggil berurutan mulai dari nomor 1. Jika gagal, otomatis beralih ke nomor 2, 3, dan seterusnya.';
+          }
+        }
+        updateModeHint();
+
+        modeSelect.addEventListener('change', function () {
+          updateModeHint();
+          renderModelsUi();
+          syncDirty();
+        });
+
         function getDraft() {
           return {
-            model: modelInp.value.trim(),
-            fallback_models: fallbackInp.value
-              .split(/\r?\n/)
-              .map(function (x) { return x.trim(); })
-              .filter(Boolean),
+            model: modelList[0] || '',
+            fallback_models: modelList.slice(1),
+            model_mode: modeSelect.value || 'fallback',
             temperature: Number.parseFloat(tempInp.value),
             max_tokens: Number.parseInt(tokensInp.value, 10),
             history_turns: Number.parseInt(turnsInp.value, 10)
@@ -2767,9 +3705,210 @@
           }
         }
 
-        [modelInp, fallbackInp, tempInp, tokensInp, turnsInp].forEach(function (inp) {
+        [tempInp, tokensInp, turnsInp].forEach(function (inp) {
           inp.addEventListener('input', syncDirty);
         });
+
+        var listWrap = el('div', { className: 'model-priority-list' });
+        var adderSlot = el('div', { style: 'margin-top: 8px;' });
+        var countBadge = el('span', { className: 'field-hint mono' });
+
+        function renderModelsUi() {
+          clearEl(listWrap);
+          clearEl(adderSlot);
+          countBadge.textContent = modelList.length + ' / 20 model';
+
+          if (modelList.length === 0) {
+            listWrap.appendChild(
+              el('div', {
+                className: 'empty-state',
+                style: 'padding: 24px 16px;',
+                textContent: 'Belum ada model yang dipilih. Klik Tambah Model di bawah untuk menambahkan model utama.'
+              })
+            );
+          } else {
+            modelList.forEach(function (name, idx) {
+              var isPrimary = idx === 0;
+
+              var grip = el('span', { className: 'model-priority-grip' }, [createSvgIcon('grip')]);
+              var num = el('span', { className: 'model-priority-num', textContent: String(idx + 1) });
+              var nameSpan = el('span', { className: 'model-priority-name', textContent: name });
+
+              var currentMode = modeSelect ? modeSelect.value : (s.model_mode || 'fallback');
+              var tagText = '';
+              var tagCls = 'badge-neutral';
+              if (currentMode === 'round_robin') {
+                tagText = 'Rotasi #' + (idx + 1);
+                tagCls = 'badge-primary';
+              } else if (currentMode === 'fusion') {
+                tagText = isPrimary ? 'Juri / Sintesis' : ('Panel #' + idx);
+                tagCls = isPrimary ? 'badge-success' : 'badge-neutral';
+              } else {
+                tagText = isPrimary ? 'Utama' : ('Cadangan #' + idx);
+                tagCls = isPrimary ? 'badge-success' : 'badge-neutral';
+              }
+
+              var tagBadge = el('span', {
+                className: 'badge ' + tagCls,
+                textContent: tagText
+              });
+
+              var left = el('div', { className: 'model-priority-left' }, [grip, num, nameSpan, tagBadge]);
+
+              var upBtn = el('button', {
+                type: 'button',
+                className: 'btn-icon-sm',
+                title: 'Naikkan prioritas',
+                disabled: idx === 0,
+                onClick: function () {
+                  var tmp = modelList[idx];
+                  modelList[idx] = modelList[idx - 1];
+                  modelList[idx - 1] = tmp;
+                  renderModelsUi();
+                  syncDirty();
+                }
+              }, [createSvgIcon('up')]);
+
+              var downBtn = el('button', {
+                type: 'button',
+                className: 'btn-icon-sm',
+                title: 'Turunkan prioritas',
+                disabled: idx === modelList.length - 1,
+                onClick: function () {
+                  var tmp = modelList[idx];
+                  modelList[idx] = modelList[idx + 1];
+                  modelList[idx + 1] = tmp;
+                  renderModelsUi();
+                  syncDirty();
+                }
+              }, [createSvgIcon('down')]);
+
+              var delBtn = el('button', {
+                type: 'button',
+                className: 'btn-icon-sm danger',
+                title: 'Hapus model',
+                onClick: function () {
+                  modelList.splice(idx, 1);
+                  renderModelsUi();
+                  syncDirty();
+                }
+              }, [createSvgIcon('close')]);
+
+              var actions = el('div', { className: 'model-priority-actions' }, [upBtn, downBtn, delBtn]);
+
+              listWrap.appendChild(
+                el('div', { className: 'model-priority-item' }, [left, actions])
+              );
+            });
+          }
+
+          if (modelList.length >= 20) {
+            adderSlot.appendChild(
+              el('div', {
+                className: 'model-add-dashed',
+                style: 'cursor: not-allowed; opacity: 0.5;',
+                textContent: 'Maksimal 20 model tercapai'
+              })
+            );
+          } else {
+            renderAddButton();
+          }
+        }
+
+        function renderAddButton() {
+          clearEl(adderSlot);
+          var addBtn = el('button', {
+            type: 'button',
+            className: 'model-add-dashed',
+            onClick: function () {
+              renderAddForm();
+            }
+          }, [createSvgIcon('plus'), el('span', { textContent: 'Tambah Model' })]);
+          adderSlot.appendChild(addBtn);
+        }
+
+        function renderAddForm() {
+          clearEl(adderSlot);
+          var formInput = el('input', {
+            type: 'text',
+            className: 'text-input mono',
+            list: 'global-models-datalist',
+            placeholder: 'Ketik atau pilih provider/model (contoh: 9r/kaliber-ai)'
+          });
+
+          var quickSelect = el('select', { className: 'select-input' }, [
+            el('option', { value: '', textContent: '-- Pilih dari model tersedia --' })
+          ]);
+
+          var seen = {};
+          (state.modelsList || []).forEach(function (group) {
+            var prov = group.provider || '';
+            (group.models || []).forEach(function (m) {
+              var full = prov ? (prov + '/' + m) : m;
+              if (!seen[full] && modelList.indexOf(full) === -1) {
+                seen[full] = true;
+                quickSelect.appendChild(el('option', { value: full, textContent: full }));
+              }
+            });
+          });
+
+          quickSelect.addEventListener('change', function () {
+            if (quickSelect.value) {
+              formInput.value = quickSelect.value;
+            }
+          });
+
+          var addErr = el('div', { className: 'field-error hidden', style: 'margin-top: 6px;' });
+
+          var confirmBtn = el('button', {
+            type: 'button',
+            className: 'btn btn-primary btn-sm',
+            textContent: 'Tambahkan',
+            onClick: function () {
+              var val = formInput.value.trim();
+              if (!val) {
+                addErr.textContent = 'Nama model tidak boleh kosong.';
+                addErr.classList.remove('hidden');
+                return;
+              }
+              if (modelList.indexOf(val) !== -1) {
+                addErr.textContent = 'Model "' + val + '" sudah ada di dalam daftar.';
+                addErr.classList.remove('hidden');
+                return;
+              }
+              modelList.push(val);
+              renderModelsUi();
+              syncDirty();
+            }
+          });
+
+          var cancelBtn = el('button', {
+            type: 'button',
+            className: 'btn btn-secondary btn-sm',
+            textContent: 'Batal',
+            onClick: function () {
+              renderAddButton();
+            }
+          });
+
+          var box = el('div', { className: 'model-add-box' }, [
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', textContent: 'Pilih atau Ketik Model Baru' }),
+              quickSelect,
+              formInput,
+              addErr
+            ]),
+            el('div', { className: 'btn-row', style: 'justify-content: flex-end; margin-top: 6px;' }, [
+              cancelBtn,
+              confirmBtn
+            ])
+          ]);
+
+          adderSlot.appendChild(box);
+          formInput.focus();
+        }
+
+        renderModelsUi();
 
         var fetchModelsBtn = el('button', {
           type: 'button',
@@ -2786,6 +3925,7 @@
                   total += (state.modelsList[i].models || []).length;
                 }
                 showToast('Berhasil memuat ' + total + ' model ke daftar pilihan.');
+                renderModelsUi();
               })
               .catch(function (err) {
                 showToast(err.message || 'Gagal memuat daftar model.');
@@ -2803,8 +3943,20 @@
           onClick: function () {
             pingBtn.disabled = true;
             pingResultBox.className = 'field-hint';
-            pingResultBox.textContent = 'Menguji rencana model aktif...';
-            apiFetch('/api/llm/ping', { method: 'POST' })
+            pingResultBox.textContent = 'Menguji model...';
+
+            var patch = computeChangedSettings(getDraft(), state.settings);
+            var preStep = Object.keys(patch).length > 0
+              ? apiFetch('/api/settings', { method: 'PUT', body: patch }).then(function (res) {
+                  state.settings = res.settings;
+                  syncDirty();
+                })
+              : Promise.resolve();
+
+            preStep
+              .then(function () {
+                return apiFetch('/api/llm/ping', { method: 'POST' });
+              })
               .then(function (res) {
                 pingResultBox.className = res.ok ? 'field-success' : 'field-error';
                 pingResultBox.textContent = (res.model ? '[' + res.model + '] ' : '') + res.message + ' (' + res.latencyMs + ' ms)';
@@ -2853,7 +4005,7 @@
               el('h2', { className: 'card-title', textContent: 'Konfigurasi Model dan Parameter LLM' }),
               el('p', {
                 className: 'card-desc',
-                textContent: 'Atur pemilihan model, suhu generasi, batas token, dan giliran memori.'
+                textContent: 'Atur mode routing model, daftar prioritas model, suhu generasi, dan riwayat memori.'
               })
             ]),
             el('div', { className: 'btn-row' }, [
@@ -2862,21 +4014,19 @@
               pingBtn
             ])
           ]),
-          !isManual
-            ? el('div', {
-                className: 'field-warn',
-                style: 'margin-bottom: 16px;',
-                textContent: 'Mode penggunaan saat ini adalah "' + s.llm_strategy + '". Pemilihan model utama dan cadangan dikelola otomatis dari daftar di tab Provider.'
-              })
-            : null,
           pingResultBox,
-          el('div', { className: 'field-group', style: 'margin-top: 12px;' }, [
-            el('label', { className: 'field-label', for: 'model-primary-input', textContent: 'Model Utama (model)' }),
-            modelInp
+          el('div', { className: 'field-group', style: 'margin-top: 14px;' }, [
+            el('label', { className: 'field-label', for: 'model-mode-input', textContent: 'Mode Routing Model' }),
+            modeSelect,
+            modeHint
           ]),
-          el('div', { className: 'field-group' }, [
-            el('label', { className: 'field-label', for: 'model-fallback-input', textContent: 'Model Cadangan / Fallback (satu per baris)' }),
-            fallbackInp
+          el('div', { className: 'model-priority-card', style: 'margin-top: 14px;' }, [
+            el('div', { className: 'model-priority-header' }, [
+              el('label', { className: 'field-label', textContent: 'Daftar Prioritas Model' }),
+              countBadge
+            ]),
+            listWrap,
+            adderSlot
           ]),
           el('div', { className: 'form-grid-3' }, [
             el('div', { className: 'field-group' }, [
@@ -2898,7 +4048,6 @@
 
         container.appendChild(card);
       }
-
       /* TAB 6: GUARD */
       function renderGuardTab(container) {
         clearEl(container);
@@ -3273,18 +4422,85 @@
         container.appendChild(card);
       }
 
+      function appendConsoleLine(container, item) {
+        var line = el('div', { className: 'console-line' });
+        var timeSpan = el('span', { className: 'console-time', textContent: '[' + item.timeStr + ']' });
+        var tagSpan = el('span', { className: 'console-tag ' + item.level, textContent: '[' + item.tag + ']' });
+        var msgSpan = el('span', { className: 'console-msg', textContent: item.message });
+        line.appendChild(timeSpan);
+        line.appendChild(tagSpan);
+        line.appendChild(msgSpan);
+        container.appendChild(line);
+      }
+
+      function renderActivityLogsTable(container) {
+        clearEl(container);
+        if (state.logs.length === 0) {
+          container.appendChild(
+            el('div', {
+              className: 'empty-state',
+              textContent: 'Belum ada catatan aktivitas pesan. Log akan muncul setelah bot menerima pesan WhatsApp atau simulasi dari tab Uji Coba.'
+            })
+          );
+          return;
+        }
+
+        var tbody = el('tbody');
+        for (var i = 0; i < state.logs.length; i++) {
+          var row = state.logs[i];
+          var stBadge = mapStatusBadge(row.status);
+          tbody.appendChild(
+            el('tr', null, [
+              el('td', { 'data-label': 'Waktu', className: 'mono', textContent: formatTimestamp(row.ts) }),
+              el('td', { 'data-label': 'Chat ID', className: 'mono', textContent: row.chat_id }),
+              el('td', { 'data-label': 'Pesan', textContent: row.message }),
+              el('td', { 'data-label': 'Balasan', textContent: row.reply || '-' }),
+              el('td', { 'data-label': 'Status' }, [
+                el('span', { className: 'badge ' + stBadge.cls, textContent: stBadge.text })
+              ]),
+              el('td', { 'data-label': 'Model', className: 'mono', textContent: row.model || '-' }),
+              el('td', { 'data-label': 'Latensi', className: 'mono', textContent: (row.latency_ms || 0) + ' ms' })
+            ])
+          );
+        }
+
+        var table = el('table', { className: 'comparison-table' }, [
+          el('thead', null, [
+            el('tr', null, [
+              el('th', { textContent: 'Waktu' }),
+              el('th', { textContent: 'Chat ID' }),
+              el('th', { textContent: 'Pesan' }),
+              el('th', { textContent: 'Balasan' }),
+              el('th', { textContent: 'Status' }),
+              el('th', { textContent: 'Model' }),
+              el('th', { textContent: 'Latensi' })
+            ])
+          ]),
+          tbody
+        ]);
+        container.appendChild(table);
+      }
+
       /* TAB 8: LOG & AUDIT */
       function loadLogTab(container) {
         renderSkeleton(container);
         Promise.all([
           apiFetch('/api/logs'),
-          apiFetch('/api/audit')
+          apiFetch('/api/audit'),
+          apiFetch('/api/console')
         ])
           .then(function (results) {
             var rawLogs = results[0];
             var rawAudit = results[1];
+            var rawConsole = results[2];
             state.logs = Array.isArray(rawLogs) ? rawLogs : (rawLogs.logs || []);
             state.audit = Array.isArray(rawAudit) ? rawAudit : (rawAudit.audit || []);
+            state.consoleLogs = (rawConsole && rawConsole.logs) || [];
+            if (state.consoleLogs.length > 0) {
+              state.consoleLastId = state.consoleLogs[state.consoleLogs.length - 1].id;
+            } else {
+              state.consoleLastId = 0;
+            }
             if (state.activeTab === 'log') {
               renderLogTab(container);
             }
@@ -3309,6 +4525,84 @@
       function renderLogTab(container) {
         clearEl(container);
 
+        /* Console Log Realtime */
+        var terminalDiv = el('div', { className: 'console-terminal' });
+
+        function renderConsoleTerminalLines() {
+          clearEl(terminalDiv);
+          if (state.consoleLogs.length === 0) {
+            terminalDiv.appendChild(
+              el('div', { className: 'field-hint', textContent: 'Belum ada log proses realtime. Jalankan tes atau kirim pesan untuk melihat alur proses.' })
+            );
+          } else {
+            for (var c = 0; c < state.consoleLogs.length; c++) {
+              appendConsoleLine(terminalDiv, state.consoleLogs[c]);
+            }
+            terminalDiv.scrollTop = terminalDiv.scrollHeight;
+          }
+        }
+
+        var clearConsoleBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-secondary btn-sm',
+          onClick: function () {
+            apiFetch('/api/console', { method: 'DELETE' })
+              .then(function () {
+                state.consoleLogs = [];
+                state.consoleLastId = 0;
+                renderConsoleTerminalLines();
+                showToast('Console log proses berhasil dibersihkan.');
+              })
+              .catch(function (err) {
+                showToast(err.message || 'Gagal membersihkan console log.');
+              });
+          }
+        }, [createSvgIcon('trash'), el('span', { textContent: 'Bersihkan' })]);
+
+        var consoleCard = el('section', { className: 'card-base console-terminal-card' }, [
+          el('div', { className: 'card-header' }, [
+            el('div', { style: 'display: flex; align-items: center; gap: 8px;' }, [
+              el('h2', { className: 'card-title', textContent: 'Console Proses Realtime' }),
+              el('span', { className: 'console-dot' }),
+              el('span', { className: 'field-hint', style: 'margin: 0; font-size: 12px;', textContent: 'Live' })
+            ]),
+            el('div', { className: 'btn-row' }, [
+              clearConsoleBtn
+            ])
+          ]),
+          terminalDiv
+        ]);
+
+        renderConsoleTerminalLines();
+
+        var clearBtn = el('button', {
+          id: 'clear-logs-btn',
+          type: 'button',
+          className: 'btn btn-secondary btn-sm',
+          textContent: 'Bersihkan log',
+          disabled: state.logs.length === 0,
+          onClick: function () {
+            openConfirmModal({
+              title: 'Bersihkan Log Aktivitas',
+              message: 'Apakah Anda yakin ingin menghapus seluruh riwayat log aktivitas pesan? Tindakan ini tidak dapat dibatalkan.',
+              confirmLabel: 'Bersihkan',
+              danger: true,
+              onConfirm: function () {
+                return apiFetch('/api/logs', { method: 'DELETE' })
+                  .then(function () {
+                    state.logs = [];
+                    showToast('Log aktivitas pesan berhasil dibersihkan.');
+                    var logWrap = document.getElementById('activity-logs-container');
+                    if (logWrap) {
+                      renderActivityLogsTable(logWrap);
+                    }
+                    clearBtn.disabled = true;
+                  });
+              }
+            });
+          }
+        });
+
         var reloadBtn = el('button', {
           type: 'button',
           className: 'btn btn-secondary btn-sm',
@@ -3317,56 +4611,25 @@
         });
 
         /* Tabel 100 Log Terakhir */
-        var logContent;
-        if (state.logs.length === 0) {
-          logContent = el('div', {
-            className: 'empty-state',
-            textContent: 'Belum ada catatan aktivitas pesan. Log akan muncul setelah bot menerima pesan WhatsApp atau simulasi dari tab Uji Coba.'
-          });
-        } else {
-          var tbody = el('tbody');
-          for (var i = 0; i < state.logs.length; i++) {
-            var row = state.logs[i];
-            var stBadge = mapStatusBadge(row.status);
-            tbody.appendChild(
-              el('tr', null, [
-                el('td', { 'data-label': 'Waktu', className: 'mono', textContent: formatTimestamp(row.ts) }),
-                el('td', { 'data-label': 'Chat ID', className: 'mono', textContent: row.chat_id }),
-                el('td', { 'data-label': 'Pesan', textContent: row.message }),
-                el('td', { 'data-label': 'Balasan', textContent: row.reply || '-' }),
-                el('td', { 'data-label': 'Status' }, [
-                  el('span', { className: 'badge ' + stBadge.cls, textContent: stBadge.text })
-                ]),
-                el('td', { 'data-label': 'Model', className: 'mono', textContent: row.model || '-' }),
-                el('td', { 'data-label': 'Latensi', className: 'mono', textContent: (row.latency_ms || 0) + ' ms' })
-              ])
-            );
-          }
-          logContent = el('table', { className: 'comparison-table' }, [
-            el('thead', null, [
-              el('tr', null, [
-                el('th', { textContent: 'Waktu' }),
-                el('th', { textContent: 'Chat ID' }),
-                el('th', { textContent: 'Pesan' }),
-                el('th', { textContent: 'Balasan' }),
-                el('th', { textContent: 'Status' }),
-                el('th', { textContent: 'Model' }),
-                el('th', { textContent: 'Latensi' })
-              ])
-            ]),
-            tbody
-          ]);
-        }
+        var logTableContainer = el('div', { id: 'activity-logs-container' });
+        renderActivityLogsTable(logTableContainer);
 
         var logsCard = el('section', { className: 'card-base' }, [
           el('div', { className: 'card-header' }, [
             el('div', null, [
-              el('h2', { className: 'card-title', textContent: 'Log Aktivitas Pesan (100 Terakhir)' }),
-              el('p', { className: 'card-desc', textContent: 'Nomor pengirim dan chat_id ditampilkan lengkap tanpa sensor.' })
+              el('div', { style: 'display: flex; align-items: center; gap: 8px;' }, [
+                el('h2', { className: 'card-title', textContent: 'Log Aktivitas Pesan (100 Terakhir)' }),
+                el('span', { className: 'console-dot' }),
+                el('span', { className: 'field-hint', style: 'margin: 0; font-size: 12px;', textContent: 'Otomatis' })
+              ]),
+              el('p', { className: 'card-desc', textContent: 'Nomor pengirim dan chat_id ditampilkan lengkap tanpa sensor. Data diperbarui otomatis setiap ada aktivitas.' })
             ]),
-            reloadBtn
+            el('div', { className: 'btn-row' }, [
+              clearBtn,
+              reloadBtn
+            ])
           ]),
-          logContent
+          logTableContainer
         ]);
 
         /* Tabel 50 Audit Terakhir */
@@ -3418,6 +4681,7 @@
           auditContent
         ]);
 
+        container.appendChild(consoleCard);
         container.appendChild(logsCard);
         container.appendChild(auditCard);
       }

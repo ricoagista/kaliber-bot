@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   DEFAULT_SETTINGS,
-  VALID_LLM_STRATEGIES,
   VALID_LOG_LEVELS,
   type LogLevel,
   type Settings,
@@ -153,4 +152,4 @@ export function resetSettings(keys?: Array<keyof Settings>): Settings {
   return updateSettings(patch);
 }
 
-export { VALID_LLM_STRATEGIES, VALID_LOG_LEVELS };
+export { VALID_LOG_LEVELS };

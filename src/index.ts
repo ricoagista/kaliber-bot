@@ -6,8 +6,7 @@ import { prepareKeyStore, setRevealPassword, setSecretKey } from './crypto.js';
 import { closeDb, initDb, pruneStorage } from './db.js';
 import { logger } from './logger.js';
 import {
-  backfillProviderModelsAndNormalizeSettings,
-  seedDefaultProvider,
+  normalizeModelSettings,
 } from './providers.js';
 import { initSettings } from './settings.js';
 import { WaBot } from './wa.js';
@@ -17,14 +16,13 @@ async function main(): Promise<void> {
   assertStartupConfig(env);
   assertSecretKey(env);
   setSecretKey(env.secretKey);
-  setRevealPassword(env.revealPassword);
+  setRevealPassword(env.revealPassword, env.adminToken);
 
   const dbPath = path.resolve(env.dataDir, 'kaliber.db');
   initDb(dbPath);
   initSettings(env.defaultModel, env.logLevel);
   pruneStorage();
-  seedDefaultProvider(env.routerUrl, env.routerKey, env.defaultModel);
-  backfillProviderModelsAndNormalizeSettings();
+  normalizeModelSettings();
   prepareKeyStore();
 
   const pruneTimer = setInterval(() => {

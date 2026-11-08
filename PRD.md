@@ -6,7 +6,7 @@ Dokumen spesifikasi teknis dan logika program lengkap untuk **Kaliber Bot** (Cha
 
 ## 1. Tujuan & Batasan Sistem
 
-1. **Tujuan Utama**: Chatbot WhatsApp otomatis yang menjawab pertanyaan seputar LSO Kaliber hanya berdasarkan *knowledge base* yang dikelola admin lewat Web Admin, menggunakan LLM berstandar OpenAI-compatible (`/v1/chat/completions` & `/v1/models`).
+1. **Tujuan Utama**: Chatbot WhatsApp otomatis yang menjawab pertanyaan seputar LSO Kaliber hanya berdasarkan *knowledge base* yang dikelola admin lewat Web Admin, menggunakan LLM berformat OpenAI-compatible (`/v1/chat/completions` & `/v1/models`) atau Anthropic (`/v1/messages` & `/v1/models`), dipilih per provider.
 2. **Target Lingkungan**: Perangkat terbatas seperti STB HG680P (`linux/arm64`, Cortex-A53, RAM kecil) maupun PC lokal.
    - **Satu proses Node.js** (`>= 22.13`, TypeScript ESM) menjalankan WhatsApp client + HTTP server sekaligus.
    - **Tanpa proses eksternal berat**: Tanpa Redis, tanpa ORM, tanpa worker thread, tanpa bundler frontend. Database menggunakan modul bawaan `node:sqlite` (`DatabaseSync`).
@@ -27,7 +27,7 @@ src/
   db.ts         Koneksi node:sqlite (WAL mode), migrasi berurutan (PRAGMA user_version), fungsi query log/audit/strike/mute, pruneStorage()
   settings.ts   Cache settings in-memory, initSettings(), getSetting(), getSettings(), updateSettings(), resetSettings()
   crypto.ts     Enkripsi/dekripsi API key (AES-256-GCM + scrypt KEK cache format v2), migrasi format legacy, verifikasi REVEAL_PASSWORD
-  providers.ts  CRUD provider & key, rotasi key round-robin + cooldown, strategi LLM (manual / round_robin / priority), buildModelPlan()
+  providers.ts  CRUD provider & key, rotasi key round-robin + cooldown, buildModelPlan()
   endpoint.ts   Normalisasi Base URL provider & generator kandidat URL (/v1/... dan non-/v1/...)
   wa.ts         Koneksi Baileys WhatsApp, QR/pairing code, auto-reconnect eksponensial, ekstraksi pesan & JID, kirim balasan + efek mengetik
   pipeline.ts   Alur utama pemrosesan pesan 10 langkah (bebas dari dependensi Baileys)
@@ -52,14 +52,12 @@ public/
 | :--- | :--- | :--- | :--- |
 | `ADMIN_TOKEN` | **Wajib** | - | Minimal **24 karakter**. Jika kurang, proses menolak start (`throw Error`). Dipakai untuk Bearer auth ke `/api/*`. |
 | `SECRET_KEY` | **Wajib** | - | Minimal **32 karakter**. Jika kurang, proses menolak start. Dipakai untuk menurunkan kunci enkripsi AES-256-GCM (`KEK`) bagi API key di SQLite. |
-| `REVEAL_PASSWORD` | Opsional | `""` | Jika diisi, minimal **12 karakter**. Di-hash dengan `scrypt` di memori saat start (tidak pernah masuk SQLite). Dipakai untuk fitur *reveal* API key. |
+| `REVEAL_PASSWORD` | Opsional | `""` | Jika diisi, minimal **12 karakter**. Jika dikosongkan, fitur reveal otomatis menggunakan `ADMIN_TOKEN`. Di-hash dengan `scrypt` di memori saat start (tidak pernah masuk SQLite). Dipakai untuk fitur *reveal* API key. |
 | `PORT` | Opsional | `3000` | Port HTTP server. |
 | `HOST` | Opsional | `127.0.0.1` | Hostname binding HTTP server. |
 | `TRUST_PROXY` | Opsional | `false` | Jika `true`, IP klien diambil dari header `CF-Connecting-IP` atau `X-Forwarded-For` pertama; jika `false`, diambil dari socket TCP langsung. |
 | `DATA_DIR` | Opsional | `./data` | Direktori penyimpanan `kaliber.db` dan folder sesi Baileys `wa-auth/`. |
 | `TZ` | Opsional | `Asia/Jakarta` | Zona waktu runtime. |
-| `ROUTER_URL` | Opsional | `""` | Hanya dipakai untuk *seed* provider `default` saat tabel `providers` masih kosong. |
-| `ROUTER_KEY` | Opsional | `""` | Hanya dipakai untuk *seed* API key `primary` pada provider `default` saat pertama kali dibuat. |
 | `DEFAULT_MODEL` | Opsional | `""` | Seed model awal jika belum diatur lewat Web Admin. Jika dikosongkan kembali di `.env` dan model belum pernah disimpan manual dari Web Admin, model otomatis dikosongkan. |
 | `LOG_LEVEL` | Opsional | `warn` | Seed awal untuk `settings.log_level` (`trace`/`debug`/`info`/`warn`/`error`/`fatal`). |
 
@@ -74,10 +72,7 @@ flowchart TD
     E --> F["initDb(DATA_DIR/kaliber.db): WAL, busy_timeout=5000, jalankan MIGRATIONS"]
     F --> G["initSettings(DEFAULT_MODEL, LOG_LEVEL): muat/seed settings + template knowledge"]
     G --> H["pruneStorage(): bersihkan baris kadaluarsa & batasi 2000 baris"]
-    H --> I{"Tabel providers kosong\nDAN ROUTER_URL terisi?"}
-    I -- Ya --> J["Buat provider 'default' + enkripsi ROUTER_KEY bila ada"]
-    I -- Tidak --> K["backfillProviderModels() (sekali) & normalizeModelSettings()"]
-    J --> K
+    H --> K["normalizeModelSettings()"]
     K --> L["prepareKeyStore(): migrasi ciphertext legacy ke v2 + hangatkan cache dekripsi"]
     L --> M["Jadwalkan setInterval pruneStorage() tiap 1 jam (.unref())"]
     M --> N["Inisialisasi WaBot(DATA_DIR/wa-auth) & Hono createApi()"]
@@ -129,15 +124,14 @@ Database dijalankan dengan:
    - `latency_ms INTEGER NOT NULL`
    - `model TEXT` (model yang menjawab, boleh `NULL`)
    - Index: `(ts)`
-7. **`providers`** (daftar endpoint LLM OpenAI-compatible, maksimal 5 baris)
+7. **`providers`** (daftar endpoint LLM berformat OpenAI-compatible atau Anthropic, maksimal 5 baris)
    - `id INTEGER PRIMARY KEY AUTOINCREMENT`
    - `name TEXT NOT NULL UNIQUE` (`^[a-z0-9][a-z0-9_-]{0,31}$`)
    - `base_url TEXT NOT NULL` (`^https?://`, dinormalisasi tanpa trailing slash/`/chat/completions`/`/models`)
-   - `model TEXT NOT NULL DEFAULT ''` (model default milik provider, maks 120 karakter)
+   - `format TEXT NOT NULL DEFAULT 'openai'` (`openai` atau `anthropic`; ditambahkan lewat migrasi `ALTER TABLE`)
    - `enabled INTEGER NOT NULL DEFAULT 1` (`1` atau `0`)
-   - `priority INTEGER NOT NULL DEFAULT 0` (`-1000` s/d `1000`, angka kecil didahulukan)
    - `created_at INTEGER NOT NULL`
-8. **`provider_keys`** (daftar API key per provider, maksimal 20 key per provider)
+8. **`provider_keys`** (daftar API key per provider, maksimal 5 key per provider)
    - `id INTEGER PRIMARY KEY AUTOINCREMENT`
    - `provider_id INTEGER NOT NULL REFERENCES providers(id) ON DELETE CASCADE`
    - `label TEXT NOT NULL`
@@ -193,8 +187,12 @@ flowchart TD
    - Menolak jika `state === 'open'` atau `creds.registered === true`.
    - Jika sebelumnya `loggedOut === true`, bersihkan direktori `wa-auth` terlebih dahulu.
    - Menunggu socket siap (`waitForSocketOpen()`, timeout 15 detik), lalu memanggil `sock.requestPairingCode(phone)` dengan nomor hanya digit (awalan `0` diubah menjadi `62`, panjang 8–15 digit).
-3. **Logout (`logout()`)**:
-   - Memanggil `sock.logout()` (fallback `sock.end()`), menghapus bersih direktori `wa-auth`, mereset state, dan langsung membuka koneksi baru (`connect()`) agar QR baru siap di-scan.
+3. **Logout & Remote Logout**:
+   - **Logout Manual (`logout()` / `POST /api/wa/logout`)**: Memanggil `sock.logout()` (fallback `sock.end()`), menghapus bersih direktori `wa-auth`, mereset state, dan langsung membuka koneksi baru (`connect()`) agar QR baru siap di-scan.
+   - **Remote Logout (`DisconnectReason.loggedOut` / 401)**: Saat WhatsApp memutus sesi dari sisi ponsel, folder `wa-auth` dibersihkan dan koneksi baru (`void this.connect()`) langsung dibentuk ulang otomatis sehingga QR code baru segera tersedia di Web Admin.
+   - **Pencegahan Reconnect Loop (`DisconnectReason.connectionReplaced` / 440)**: Jika status pemutusan adalah 440 (sesi digantikan oleh instance lain), auto-reconnect dihentikan untuk mencegah dua proses saling memutus koneksi.
+   - **Guard Instance Socket**: Handler event `connection.update` dan `creds.update` menerapkan guard `if (this.sock !== sock) return;` agar instance socket lama yang tertutup tidak merusak siklus hidup instance socket baru.
+   - **Kesiapan Socket untuk Pairing**: `waitForSocketOpen()` memvalidasi flag `this.socketReady` (diset setelah event `qr` pertama diterima atau status koneksi `open`) sebelum memanggil `sock.requestPairingCode(...)`.
 4. **Resolusi Identitas Pengirim (`handleIncoming`)**:
    - Hanya memproses event `messages.upsert` dengan `type === 'notify'`.
    - Mengumpulkan kandidat JID pengirim dari `[participant, participantAlt, remoteJid, remoteJidAlt]`.
@@ -243,8 +241,10 @@ flowchart TD
     S8Check -- "Berhasil" --> S9["9. Sanitasi Output (sanitizeOutput):\n- Buang <think> & tag internal\n- Cek bocor 8 kata berurutan dari system prompt & pola rahasia\n- Ubah ke Markdown WA & potong maks 1500 karakter"]
     S9 --> S9Leak{"Terdeteksi bocor (leaked)?"}
     S9Leak -- "Ya" --> LeakBlock(["Return status: 'blocked', flag: 'output_leak', reply: settings.fallback_text"])
-    S9Leak -- "Tidak" --> S10["10. Simpan Memori & Log:\n- addMessage(senderId, 'user', normalized)\n- addMessage(senderId, 'assistant', reply)\n- insertLog(status: 'ok')"]
+    S9Leak -- "Tidak" --> S10["10. Simpan Memori & Log:\n- addMessage(senderId, 'user', normalized)\n- addMessage(senderId, 'assistant', reply)\n- insertLog(status: 'ok', rawText)"]
     S10 --> Done(["Return status: 'ok', reply, meta"])
+    
+    %% Catatan Audit: insertLog mencatat teks mentah pengirim (rawText) sebelum normalisasi untuk integritas log audit, sedangkan riwayat percakapan LLM menyimpan teks yang telah dinormalisasi.
 ```
 
 > **Catatan `admin-test`**: Jika `chatId === 'admin-test'` (berasal dari `POST /api/test`), parameter `bypassLimits: true` dikirim ke `checkGuard()` sehingga pemeriksaan **blocklist, mute, allowlist, rate limit, group cooldown, dan pencatatan strike dilewati**, namun pemeriksaan **batas panjang karakter (`max_input_chars`) dan deteksi regex prompt injection tetap dijalankan**.
@@ -338,35 +338,29 @@ Setiap jawaban dari LLM melewati tahapan berikut:
 - Hasil dekripsi di-cache di memori (`decryptedKeys` Map, maks 200 entri) berdasarkan `key.id`, dan diinvalidasi setiap kali key diubah atau dihapus.
 - **Masking**: API tidak pernah mengirimkan `key_encrypted` atau plaintext key pada endpoint `GET`. Hanya `keyLast4` (4 karakter terakhir) yang dikirim ke klien.
 - **Reveal Key (`POST /api/keys/:id/reveal`)**:
-  - Memerlukan `REVEAL_PASSWORD` yang diset di `.env` server.
+  - Memerlukan verifikasi password (menggunakan `ADMIN_TOKEN` secara bawaan, atau `REVEAL_PASSWORD` jika disetel di `.env`).
   - Verifikasi password menggunakan `scryptSync` + `timingSafeEqual` (panjang password dibatasi maks 256 karakter).
   - Dibatasi rate limit **5 kegagalan / 15 menit / IP** (HTTP 429).
   - Setiap percobaan (berhasil maupun gagal) wajib dicatat ke tabel `audit_log` beserta alasan (`result`).
 
-### 9.2 Strategi Pemilihan Provider & Model (`buildModelPlan`)
+### 9.2 Pemilihan & Mode Routing Model (`buildModelPlan`)
 
-```mermaid
-flowchart TD
-    A["buildModelPlan(settings, { advance })"] --> B{"settings.llm_strategy?"}
-    B -- "'manual' (default)" --> C["Gunakan settings.model + settings.fallback_models"]
-    B -- "'round_robin' atau 'priority'" --> D["Ambil semua provider dengan:\n- enabled == true\n- model.trim() != ''\n- tanpa key (lokal) ATAU punya >= 1 key enabled"]
-    D --> E{"Ada provider eligible?"}
-    E -- "Tidak ada" --> C
-    E -- "Ada" --> F["Pisahkan menjadi:\n- healthy: punya key aktif dengan cooldown_until <= now (atau tanpa key)\n- unhealthy: semua key aktif sedang cooldown"]
-    F --> G{"strategy == 'round_robin'?"}
-    G -- "Ya" --> H["Putar urutan healthy mulai dari indeks (providerCounter % healthy.length),\nlalu diikuti unhealthy. Naikkan providerCounter bila advance != false"]
-    G -- "Tidak ('priority')" --> I["Urutkan healthy (priority ASC, id ASC) lalu diikuti unhealthy"]
-    H --> J["Bentuk daftar kandidat '<provider.name>/<provider.model>'"]
-    I --> J
-    J --> K["Return { model: candidates[0], fallbackModels: candidates.slice(1) }"]
-```
+Provider tidak memiliki model default, prioritas, maupun strategi pemanggilan otomatis. Manajemen model dipusatkan sepenuhnya di **Tab Model** melalui pemilih mode routing dan tabel prioritas interaktif (mendukung hingga **20 model**):
+- **Mode Routing (`settings.model_mode`)**:
+  - `fallback` (bawaan): Model dipanggil berurutan mulai dari nomor 1 (Model Utama). Jika gagal (timeout/error/rate limit), otomatis beralih ke Model Cadangan nomor 2, 3, dan seterusnya.
+  - `round_robin`: Model nomor 1 sampai N dipanggil bergiliran (rotasi counter in-memory) untuk meratakan beban antar model. Jika model yang sedang bergiliran gagal, sistem otomatis melakukan fallback berantai ke model berikutnya dalam rotasi.
+  - `fusion`: Pertanyaan pengguna dikirim bersamaan ke panel model teratas (maksimal 3 model secara paralel via `Promise.allSettled`). Jawaban yang berhasil kemudian disintesis oleh model utama menjadi satu jawaban akhir terbaik dalam Bahasa Indonesia. Jika hanya 1 model yang berhasil atau sintesis gagal, sistem melakukan degradasi anggun (graceful degradation) langsung menggunakan jawaban terbaik tanpa error.
+- **Model Utama (`settings.model`)**: Model urutan ke-1 pada tabel prioritas yang pertama kali dipanggil untuk menjawab pesan.
+- **Model Cadangan (`settings.fallback_models`)**: Model urutan ke-2 sampai ke-20 pada tabel yang dipanggil berurutan jika model di atasnya gagal atau terkena limit.
+- **Pembersihan Berantai saat Provider Dihapus (`deleteProvider`)**: Menghapus provider otomatis membersihkan seluruh referensi model berawalan `namaProvider/` dari `settings.model` dan `settings.fallback_models`. Jika model utama terhapus, model cadangan pertama yang tersisa otomatis dipromosikan menjadi model utama. Jika tidak ada provider tersisa, model dikosongkan.
+- **Penyesuaian Berantai saat Provider Diubah Nama (`updateProvider`)**: Jika nama provider diubah, seluruh entri model `namaLama/...` otomatis disesuaikan menjadi `namaBaru/...`.
 
 ### 9.3 Resolusi Key & Rotasi di Dalam Provider (`resolveModel`)
 Saat `callLlm` mencoba memanggil kandidat model `namaProvider/namaModel` (atau `namaModel` tanpa prefix):
 1. Jika model memiliki prefix `namaProvider/`:
    - Cari provider di DB berdasarkan `name`.
    - Jika provider ditemukan tetapi `enabled === false`, langsung kembalikan `null` (lewati kandidat ini, **jangan** dialihkan ke provider default).
-   - Jika prefix bukan nama provider yang terdaftar di DB (misal nama model bawaan seperti `openai/gpt-oss-120b` ketika hanya ada 1 provider `default`), gunakan provider aktif dengan prioritas tertinggi (`ORDER BY priority ASC, id ASC LIMIT 1`) dan kirim seluruh string model apa adanya.
+   - Jika prefix bukan nama provider yang terdaftar di DB (misal nama model bawaan seperti `openai/gpt-oss-120b` ketika hanya ada 1 provider `default`), gunakan provider aktif pertama (`ORDER BY id ASC LIMIT 1`) dan kirim seluruh string model apa adanya.
 2. Ambil semua key milik provider tersebut:
    - Jika provider **tidak memiliki baris key sama sekali** (`allKeys.length === 0`, misalnya 9router lokal tanpa autentikasi), izinkan request dengan `apiKey: ""`.
    - Jika provider memiliki key, saring yang `enabled === 1`. Jika tidak ada yang aktif, kembalikan `null`.
@@ -376,8 +370,10 @@ Saat `callLlm` mencoba memanggil kandidat model `namaProvider/namaModel` (atau `
 
 ### 9.4 Timeout, Budget Waktu, Retry, & Cooldown Key (`callLlm`)
 1. **Total Time Budget**: Setiap pemanggilan `callLlm` memiliki batas waktu total **`totalBudgetMs = 75.000 ms` (75 detik)** dan timeout per request **`30.000 ms`**. Jika sisa budget `< 3.000 ms`, hentikan percobaan dan kembalikan `fallback_text`.
-2. **Normalisasi Endpoint (`endpointCandidates`)**:
-   - Untuk setiap `baseUrl`, jika berakhiran `/v1`, kandidat pertama adalah `${baseUrl}/chat/completions` dan kandidat kedua (bila 404) adalah tanpa `/v1`. Sebaliknya jika tidak berakhiran `/v1`, coba `${baseUrl}/chat/completions` lalu `${baseUrl}/v1/chat/completions`.
+2. **Format Provider & Normalisasi Endpoint**:
+   - **Format OpenAI-compatible (`format: 'openai'`)**: Menggunakan kandidat endpoint `/chat/completions` (dengan dan tanpa `/v1`), header `Authorization: Bearer <apiKey>`, dan payload `{ model, messages, temperature, max_tokens, stream: false }`.
+   - **Format Anthropic (`format: 'anthropic'`)**: Menggunakan kandidat endpoint `/messages` (dengan dan tanpa `/v1`), header `x-api-key: <apiKey>` dan `anthropic-version: 2023-06-01`, payload `{ model, messages, system?, temperature, max_tokens, stream: false }` dengan memisahkan instruksi sistem dan memastikan giliran `user`/`assistant` berselang-seling.
+   - Output diekstrak secara agnostik format dari `choices[0].message.content` (OpenAI) maupun `content[].text` (Anthropic).
 3. **Aturan Cooldown & Status Key saat Gagal (`markKeyFailed`)**:
    - Naikkan `fail_count = fail_count + 1` dan perbarui `last_checked_at = now`.
    - Jika provider hanya punya **1 key aktif** (`!otherKey`), `cooldown_until` tetap `0` agar tidak mengunci satu-satunya key.
@@ -444,29 +440,32 @@ Digunakan untuk tombol **Tes** per key, **Tes koneksi** provider, maupun **Tes d
 | `GET /` | Publik | Menyajikan `public/index.html` (`Cache-Control: no-store`). |
 | `GET /kaliber.avif` | Publik | Menyajikan aset logo `public/kaliber.avif` (`Content-Type: image/avif`). |
 | `GET /api/settings` | Bearer | Mengembalikan `{ settings, defaults, limits: { knowledge_warn_chars: 12000, body_bytes: 65536 }, has_reveal_password }`. |
-| `PUT /api/settings` | Bearer | Memvalidasi *whitelist* key, tipe data, rentang angka, batas panjang string, enum `llm_strategy` & `log_level`, serta uji anti-ReDoS `injection_patterns`. Menyimpan secara atomik ke SQLite & cache memori. |
-| `GET /api/status` | Bearer | Mengembalikan snapshot WA (`state`, `qrDataUrl`, `pairingCode`, `me`, `lastError`), status bot, `uptimeSec`, `rssMb`, statistik hari ini (`messagesToday`, `blockedToday`), `strikes`, `mutes`, `model` efektif, dan `routerUrl`. |
+| `PUT /api/settings` | Bearer | Memvalidasi *whitelist* key, tipe data, rentang angka, batas panjang string, enum `log_level`, serta uji anti-ReDoS `injection_patterns`. Menyimpan secara atomik ke SQLite & cache memori. |
+| `GET /api/status` | Bearer | Mengembalikan snapshot WA (`state`, `qrDataUrl`, `pairingCode`, `me`, `lastError`), status bot, `uptimeSec` (diformat eksplisit di UI dengan satuan `hari`, `jam`, `mnt`, `dtk`), `rssMb`, statistik hari ini (`messagesToday`, `blockedToday`), `strikes`, `mutes`, dan `model` efektif. |
 | `POST /api/wa/pairing` | Bearer | Body `{ phone }`. Meminta 8-karakter pairing code WhatsApp ke Baileys. |
 | `POST /api/wa/logout` | Bearer | Memutuskan sesi WhatsApp, menghapus `wa-auth`, dan memulai sesi baru. |
 | `POST /api/bot/toggle` | Bearer | Body `{ enabled?: boolean }`. Mengubah `settings.bot_enabled`. |
 | `POST /api/test` | Bearer | Body `{ text }`. Menjalankan `handleMessage({ chatId: 'admin-test', senderId: 'admin-test', text })` tanpa mengirim ke WhatsApp. |
 | `GET /api/logs` | Bearer | Mengembalikan 100 baris terakhir dari tabel `logs` (`ORDER BY ts DESC, id DESC LIMIT 100`). |
+| `DELETE /api/logs` | Bearer | Menghapus seluruh baris riwayat aktivitas pesan dari tabel `logs`. |
+| `GET /api/console` | Bearer | Query `?since=<id>`. Mengembalikan log proses realtime (buffer in-memory maks 300 entri). |
+| `DELETE /api/console` | Bearer | Mengosongkan buffer console log proses realtime. |
 | `GET /api/audit` | Bearer | Mengembalikan 50 baris terakhir dari tabel `audit_log` (`ORDER BY ts DESC, id DESC LIMIT 50`). |
-| `POST /api/llm/ping` | Bearer | Menguji koneksi LLM aktif menggunakan rencana dari `buildModelPlan(settings, { advance: false })`. |
-| `POST /api/llm/test` | Bearer | Body `{ baseUrl, apiKey?, model?, providerId?, keyId? }`. Menjalankan `probeProvider()` untuk menguji kombinasi URL/key/model sebelum maupun sesudah disimpan. Selalu membalas HTTP 200 dengan objek `ProbeResult`. |
+| `POST /api/llm/ping` | Bearer | Menguji koneksi LLM aktif menggunakan rencana dari `buildModelPlan(settings)`. |
+| `POST /api/llm/test` | Bearer | Body `{ baseUrl, format?, apiKey?, model?, providerId?, keyId? }`. Menjalankan `probeProvider()` untuk menguji kombinasi URL/key/model sebelum maupun sesudah disimpan. Selalu membalas HTTP 200 dengan objek `ProbeResult`. |
 | `GET /api/models` | Bearer | Mengambil daftar model secara paralel (`GET /models`) dari seluruh provider yang aktif. |
-| `GET /api/providers` | Bearer | Mengembalikan `{ providers, maxProviders: 5, maxKeysPerProvider: 20, serverNow }` (tanpa `keyEncrypted`). |
-| `POST /api/providers` | Bearer | Body `{ name, baseUrl, model?, priority? }`. Membuat provider baru (maks 5; balas `409` jika penuh atau nama duplikat). |
-| `PUT /api/providers/:id` | Bearer | Body `{ name?, baseUrl?, model?, priority?, enabled? }`. Memperbarui provider. |
+| `GET /api/providers` | Bearer | Mengembalikan `{ providers, maxProviders: 5, maxKeysPerProvider: 5, serverNow }` (tanpa `keyEncrypted`). |
+| `POST /api/providers` | Bearer | Body `{ name, baseUrl, format?, apiKey, keyLabel? }`. `format` bernilai `openai` (bawaan) atau `anthropic`. `apiKey` **wajib**; provider dan key pertamanya disimpan atomik. Membuat provider baru (maks 5; balas `409` jika penuh atau nama duplikat, `400` jika `apiKey` kosong). |
+| `PUT /api/providers/:id` | Bearer | Body `{ name?, baseUrl?, format?, enabled? }`. Memperbarui provider. |
 | `DELETE /api/providers/:id` | Bearer | Menghapus provider beserta seluruh key-nya + invalidasi cache key. |
 | `POST /api/providers/:id/toggle` | Bearer | Body `{ enabled: boolean }`. Mengaktifkan/menonaktifkan provider. |
 | `POST /api/providers/:id/test` | Bearer | Menguji provider memakai key aktif yang sehat (`probeProvider`) dan menyimpan status hasil tes ke key tersebut. |
 | `GET /api/providers/:id/models` | Bearer | Mengambil daftar model dari satu provider tertentu. |
-| `POST /api/providers/:id/keys` | Bearer | Body `{ label, apiKey }`. Mengenkripsi `apiKey` (AES-256-GCM v2) dan menyimpannya (maks 20 key/provider; balas `409` jika penuh). |
+| `POST /api/providers/:id/keys` | Bearer | Body `{ label, apiKey }`. Mengenkripsi `apiKey` (AES-256-GCM v2) dan menyimpannya (maks 5 key/provider; balas `409` jika penuh). |
 | `DELETE /api/providers/:id/keys/:keyId` | Bearer | Menghapus 1 API key + invalidasi cache dekripsi. |
 | `POST /api/providers/:id/keys/:keyId/toggle` | Bearer | Body `{ enabled: boolean }`. Mengaktifkan/menonaktifkan 1 API key. |
 | `POST /api/providers/:providerId/keys/:keyId/test` | Bearer | Menguji 1 API key spesifik dengan `probeProvider` dan memperbarui `last_status` serta `last_checked_at` di DB. |
-| `POST /api/keys/:id/reveal` | Bearer | Body `{ password }`. Memverifikasi `REVEAL_PASSWORD`, mencatat ke `audit_log`, dan mengembalikan `{ ok: true, keyId, label, plainKey }`. |
+| `POST /api/keys/:id/reveal` | Bearer | Body `{ password }`. Memverifikasi password (`ADMIN_TOKEN` atau `REVEAL_PASSWORD`), mencatat ke `audit_log`, dan mengembalikan `{ ok: true, keyId, label, plainKey }`. |
 
 ### 11.3 Aturan Validasi `PUT /api/settings`
 - **Boolean**: `bot_enabled`, `private_enabled`, `group_enabled`, `allowlist_enabled`.
@@ -486,7 +485,6 @@ Digunakan untuk tombol **Tes** per key, **Tes koneksi** provider, maupun **Tes d
   - `fallback_text`, `refusal_text`, `info_text`, `help_text`: masing-masing maks `2.000` karakter
   - `contact`, `model`: masing-masing maks `200` karakter
   - `trigger_prefix`: maks `32` karakter
-  - `llm_strategy`: enum `'manual' | 'round_robin' | 'priority'`
   - `log_level`: enum `'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'`
 - **Array String (`LIST_KEYS`)**:
   - `allowed_groups`, `blocklist`, `allowlist`, `fallback_models`: maks `200` item, tiap item maks `300` karakter.

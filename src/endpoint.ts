@@ -19,6 +19,8 @@ export function normalizeBaseUrl(rawUrl: string): string {
   let cleanPath = parsed.pathname.replace(/\/+$/, '');
   if (cleanPath.endsWith('/chat/completions')) {
     cleanPath = cleanPath.slice(0, -'/chat/completions'.length).replace(/\/+$/, '');
+  } else if (cleanPath.endsWith('/messages')) {
+    cleanPath = cleanPath.slice(0, -'/messages'.length).replace(/\/+$/, '');
   } else if (cleanPath.endsWith('/models')) {
     cleanPath = cleanPath.slice(0, -'/models'.length).replace(/\/+$/, '');
   }
@@ -26,7 +28,7 @@ export function normalizeBaseUrl(rawUrl: string): string {
   return `${parsed.origin}${cleanPath}`;
 }
 
-export function endpointCandidates(baseUrl: string, suffix: '/chat/completions' | '/models'): string[] {
+export function endpointCandidates(baseUrl: string, suffix: '/chat/completions' | '/messages' | '/models'): string[] {
   const normalized = normalizeBaseUrl(baseUrl);
   if (normalized.endsWith('/v1')) {
     const withoutV1 = normalized.slice(0, -3).replace(/\/+$/, '');

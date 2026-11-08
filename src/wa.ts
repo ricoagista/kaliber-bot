@@ -10,7 +10,7 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 import QRCode from 'qrcode';
 import type { WaConnectionState, WaController, WaStatusSnapshot } from './api.js';
-import { logger } from './logger.js';
+import { addConsoleLog, logger } from './logger.js';
 import { handleMessage } from './pipeline.js';
 
 function normalizeJidSafe(jid?: string | null): string {
@@ -232,6 +232,7 @@ export class WaBot implements WaController {
         this.me = normalizeJidSafe(rawMe) || rawMe || null;
         this.notifySocketReady();
         logger.info({ me: this.me }, 'WhatsApp terhubung');
+        addConsoleLog('success', 'WA', `WhatsApp terhubung: ${this.me ?? 'aktif'}`);
       }
 
       if (connection === 'close') {
@@ -243,6 +244,7 @@ export class WaBot implements WaController {
         } | undefined;
         const statusCode = errObj?.output?.statusCode;
         this.lastError = errObj?.message ?? (statusCode ? `Kode ${statusCode}` : null);
+        addConsoleLog('warn', 'WA', `Koneksi WhatsApp terputus: ${this.lastError ?? 'unknown'}`);
 
         if (statusCode === DisconnectReason.loggedOut) {
           this.state = 'logged_out';
@@ -416,6 +418,7 @@ export class WaBot implements WaController {
         timestampMs = (rawTs as { toNumber: () => number }).toNumber() * 1000;
       }
 
+      addConsoleLog('info', 'WA', `Pesan masuk dari ${senderId} di ${chatId}`);
       const result = await handleMessage({
         messageId: key.id ?? undefined,
         chatId,
@@ -440,6 +443,7 @@ export class WaBot implements WaController {
         } else {
           await sock.sendMessage(remoteJid, { text: result.reply });
         }
+        addConsoleLog('success', 'WA', `Balasan terkirim ke ${chatId}`);
       }
     } catch (err) {
       logger.error({ err }, 'Gagal memproses pesan masuk WhatsApp');

@@ -79,6 +79,7 @@ const MIGRATIONS: readonly string[] = [
     result TEXT NOT NULL DEFAULT ''
   )`,
   `CREATE INDEX IF NOT EXISTS idx_audit_log_ts ON audit_log(ts)`,
+  `ALTER TABLE providers ADD COLUMN format TEXT NOT NULL DEFAULT 'openai'`,
 ];
 
 export function initDb(dbPath: string): DatabaseSync {
@@ -183,6 +184,12 @@ export function getRecentLogs(limit = 100): LogEntry[] {
        LIMIT ?`
     )
     .all(limit) as unknown as LogEntry[];
+}
+
+export function clearLogs(): number {
+  const db = getDb();
+  const info = db.prepare('DELETE FROM logs').run();
+  return Number(info.changes);
 }
 
 export function insertAudit(entry: {

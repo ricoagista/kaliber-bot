@@ -1,4 +1,4 @@
-import type { Settings } from './config.js';
+import type { ModelRoutingMode, Settings } from './config.js';
 import { decryptKeyRow, encryptApiKey, invalidateKeyCache, maskLast4 } from './crypto.js';
 import { getDb } from './db.js';
 import { normalizeBaseUrl } from './endpoint.js';
@@ -6,8 +6,17 @@ import { logger } from './logger.js';
 import { getSettings, updateSettings } from './settings.js';
 
 export const MAX_PROVIDERS = 5;
-export const MAX_KEYS_PER_PROVIDER = 20;
+export const MAX_KEYS_PER_PROVIDER = 5;
+export const PROVIDER_FORMATS = ['openai', 'anthropic'] as const;
 export const PROVIDER_NAME_REGEX = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+
+export type ProviderFormat = (typeof PROVIDER_FORMATS)[number];
+
+export function parseProviderFormat(value: unknown): ProviderFormat | null {
+  return typeof value === 'string' && (PROVIDER_FORMATS as readonly string[]).includes(value)
+    ? (value as ProviderFormat)
+    : null;
+}
 
 export type KeyStatus = '' | 'valid' | 'invalid' | 'rate_limited' | 'unreachable' | 'error';
 
@@ -28,9 +37,8 @@ export interface ProviderPublic {
   id: number;
   name: string;
   baseUrl: string;
-  model: string;
+  format: ProviderFormat;
   enabled: boolean;
-  priority: number;
   createdAt: number;
   keys: ProviderKeyPublic[];
 }
@@ -39,6 +47,7 @@ interface ProviderRow {
   id: number;
   name: string;
   base_url: string;
+  format: string;
   model: string;
   enabled: number;
   priority: number;
@@ -59,7 +68,6 @@ interface ProviderKeyRow {
   created_at: number;
 }
 
-let providerCounter = 0;
 const keyCounters = new Map<number, number>();
 
 export class ProviderError extends Error {
@@ -88,7 +96,7 @@ function toKeyPublic(row: ProviderKeyRow): ProviderKeyPublic {
 export function listProviders(): ProviderPublic[] {
   const db = getDb();
   const providers = db
-    .prepare('SELECT * FROM providers ORDER BY priority ASC, id ASC')
+    .prepare('SELECT * FROM providers ORDER BY id ASC')
     .all() as unknown as ProviderRow[];
   const keys = db
     .prepare('SELECT * FROM provider_keys ORDER BY id ASC')
@@ -105,9 +113,8 @@ export function listProviders(): ProviderPublic[] {
     id: p.id,
     name: p.name,
     baseUrl: p.base_url,
-    model: p.model,
+    format: parseProviderFormat(p.format) ?? 'openai',
     enabled: p.enabled === 1,
-    priority: p.priority,
     createdAt: p.created_at,
     keys: keysByProvider.get(p.id) ?? [],
   }));
@@ -121,8 +128,9 @@ export function getProviderById(id: number): ProviderPublic | null {
 export function createProvider(input: {
   name: string;
   baseUrl: string;
-  model?: string;
-  priority?: number;
+  format?: unknown;
+  apiKey: string;
+  keyLabel?: string;
   enabled?: boolean;
 }): ProviderPublic {
   const db = getDb();
@@ -151,27 +159,36 @@ export function createProvider(input: {
     throw new ProviderError(err instanceof Error ? err.message : 'Base URL tidak valid.', 400);
   }
 
-  const model = (input.model ?? '').trim();
-  if (model.length > 120) {
-    throw new ProviderError('Nama model default maksimal 120 karakter.', 400);
+  const format = input.format === undefined ? 'openai' : parseProviderFormat(input.format);
+  if (!format) {
+    throw new ProviderError('Format provider wajib openai atau anthropic.', 400);
   }
 
-  const priority = input.priority !== undefined ? Number(input.priority) : 0;
-  if (!Number.isInteger(priority) || priority < -1000 || priority > 1000) {
-    throw new ProviderError('Prioritas wajib bilangan bulat antara -1000 sampai 1000.', 400);
+  // API key terikat pada provider: wajib ada sejak provider dibuat.
+  if (!(input.apiKey ?? '').trim()) {
+    throw new ProviderError('API key wajib diisi untuk menambah provider.', 400);
   }
 
   const enabled = input.enabled === false ? 0 : 1;
   const now = Date.now();
 
-  const res = db
-    .prepare(
-      `INSERT INTO providers (name, base_url, model, enabled, priority, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    )
-    .run(name, baseUrl, model, enabled, priority, now);
-
-  const newId = Number(res.lastInsertRowid);
+  // Provider dan key pertamanya disimpan atomik agar tidak ada provider tanpa key.
+  let newId: number;
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const res = db
+      .prepare(
+        `INSERT INTO providers (name, base_url, format, enabled, created_at)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+      .run(name, baseUrl, format, enabled, now);
+    newId = Number(res.lastInsertRowid);
+    addProviderKey(newId, { label: input.keyLabel?.trim() || 'key-1', apiKey: input.apiKey });
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
   const created = getProviderById(newId);
   if (!created) {
     throw new ProviderError('Gagal membaca provider yang baru dibuat.', 500);
@@ -184,8 +201,7 @@ export function updateProvider(
   input: {
     name?: string;
     baseUrl?: string;
-    model?: string;
-    priority?: number;
+    format?: unknown;
     enabled?: boolean;
   }
 ): ProviderPublic {
@@ -197,6 +213,7 @@ export function updateProvider(
     throw new ProviderError('Provider tidak ditemukan.', 404);
   }
 
+  const oldName = row.name.toLowerCase();
   let name = row.name;
   if (input.name !== undefined) {
     name = input.name.trim().toLowerCase();
@@ -232,20 +249,13 @@ export function updateProvider(
     }
   }
 
-  let model = row.model;
-  if (input.model !== undefined) {
-    model = input.model.trim();
-    if (model.length > 120) {
-      throw new ProviderError('Nama model default maksimal 120 karakter.', 400);
+  let format: ProviderFormat = parseProviderFormat(row.format) ?? 'openai';
+  if (input.format !== undefined) {
+    const parsed = parseProviderFormat(input.format);
+    if (!parsed) {
+      throw new ProviderError('Format provider wajib openai atau anthropic.', 400);
     }
-  }
-
-  let priority = row.priority;
-  if (input.priority !== undefined) {
-    priority = Number(input.priority);
-    if (!Number.isInteger(priority) || priority < -1000 || priority > 1000) {
-      throw new ProviderError('Prioritas wajib bilangan bulat antara -1000 sampai 1000.', 400);
-    }
+    format = parsed;
   }
 
   let enabled = row.enabled;
@@ -255,9 +265,25 @@ export function updateProvider(
 
   db.prepare(
     `UPDATE providers
-     SET name = ?, base_url = ?, model = ?, enabled = ?, priority = ?
+     SET name = ?, base_url = ?, format = ?, enabled = ?
      WHERE id = ?`
-  ).run(name, baseUrl, model, enabled, priority, id);
+  ).run(name, baseUrl, format, enabled, id);
+
+  if (name !== oldName) {
+    const oldPrefix = `${oldName}/`;
+    const newPrefix = `${name}/`;
+    const settings = getSettings();
+    let newModel = settings.model;
+    if (newModel && newModel.toLowerCase().startsWith(oldPrefix)) {
+      newModel = newPrefix + newModel.slice(oldPrefix.length);
+    }
+    const newFallbacks = (settings.fallback_models || []).map((m) => {
+      return m.toLowerCase().startsWith(oldPrefix)
+        ? newPrefix + m.slice(oldPrefix.length)
+        : m;
+    });
+    updateSettings({ model: newModel, fallback_models: newFallbacks }, { fromAdmin: false });
+  }
 
   const updated = getProviderById(id);
   if (!updated) {
@@ -266,8 +292,54 @@ export function updateProvider(
   return updated;
 }
 
+function cleanSettingsAfterProviderDeleted(deletedProvName: string): void {
+  const settings = getSettings();
+  const prefix = `${deletedProvName.toLowerCase()}/`;
+
+  const isBoundToDeleted = (m: string) => {
+    const trimmed = m.trim().toLowerCase();
+    return trimmed.startsWith(prefix) || trimmed === deletedProvName.toLowerCase();
+  };
+
+  const oldModel = settings.model || '';
+  const oldFallbacks = Array.isArray(settings.fallback_models) ? settings.fallback_models : [];
+
+  const remainingFallbacks = oldFallbacks.filter((m) => !isBoundToDeleted(m));
+  let newModel = oldModel;
+
+  if (isBoundToDeleted(oldModel)) {
+    // Model utama berasal dari provider yang dihapus:
+    // Promosikan model cadangan pertama yang tersisa (bila ada), atau kosongkan
+    newModel = remainingFallbacks.shift() ?? '';
+  }
+
+  const db = getDb();
+  const remainingProvCount = db.prepare('SELECT COUNT(*) AS cnt FROM providers').get() as { cnt: number };
+  if (Number(remainingProvCount.cnt) === 0) {
+    newModel = '';
+    remainingFallbacks.length = 0;
+  }
+
+  if (newModel !== oldModel || remainingFallbacks.length !== oldFallbacks.length) {
+    updateSettings(
+      {
+        model: newModel,
+        fallback_models: remainingFallbacks,
+      },
+      { fromAdmin: false }
+    );
+  }
+}
+
 export function deleteProvider(id: number): void {
   const db = getDb();
+  const provRow = db
+    .prepare('SELECT id, name FROM providers WHERE id = ?')
+    .get(id) as { id: number; name: string } | undefined;
+  if (!provRow) {
+    throw new ProviderError('Provider tidak ditemukan.', 404);
+  }
+  const provName = provRow.name;
   const keys = db
     .prepare('SELECT id FROM provider_keys WHERE provider_id = ?')
     .all(id) as Array<{ id: number }>;
@@ -279,6 +351,8 @@ export function deleteProvider(id: number): void {
     invalidateKeyCache(k.id);
   }
   keyCounters.delete(id);
+
+  cleanSettingsAfterProviderDeleted(provName);
 }
 
 export function toggleProvider(id: number, enabled: boolean): ProviderPublic {
@@ -374,23 +448,23 @@ export function getProviderKeySecret(
   label: string;
   plainKey: string;
   baseUrl: string;
-  providerModel: string;
+  format: ProviderFormat;
 } | null {
   const db = getDb();
   const sql =
     providerId !== undefined
-      ? `SELECT pk.*, p.base_url, p.model AS provider_model
+      ? `SELECT pk.*, p.base_url, p.format AS provider_format
          FROM provider_keys pk
          JOIN providers p ON p.id = pk.provider_id
          WHERE pk.id = ? AND pk.provider_id = ?`
-      : `SELECT pk.*, p.base_url, p.model AS provider_model
+      : `SELECT pk.*, p.base_url, p.format AS provider_format
          FROM provider_keys pk
          JOIN providers p ON p.id = pk.provider_id
          WHERE pk.id = ?`;
 
   const row = (
     providerId !== undefined ? db.prepare(sql).get(keyId, providerId) : db.prepare(sql).get(keyId)
-  ) as unknown as (ProviderKeyRow & { base_url: string; provider_model: string }) | undefined;
+  ) as unknown as (ProviderKeyRow & { base_url: string; provider_format: string }) | undefined;
 
   if (!row) return null;
   const plainKey = decryptKeyRow(row.id, row.key_encrypted);
@@ -400,7 +474,7 @@ export function getProviderKeySecret(
     label: row.label,
     plainKey,
     baseUrl: row.base_url,
-    providerModel: row.provider_model,
+    format: parseProviderFormat(row.provider_format) ?? 'openai',
   };
 }
 
@@ -488,48 +562,9 @@ export function markKeyFailed(
   ).run(cooldownUntil, status, now, keyId);
 }
 
-export function seedDefaultProvider(routerUrl: string, routerKey: string, defaultModel = ''): void {
-  const db = getDb();
-  const countRow = db.prepare('SELECT COUNT(*) AS cnt FROM providers').get() as { cnt: number };
-  if (Number(countRow.cnt) === 0 && routerUrl.trim()) {
-    try {
-      const created = createProvider({
-        name: 'default',
-        baseUrl: routerUrl,
-        model: defaultModel.trim(),
-        priority: 0,
-        enabled: true,
-      });
-      if (routerKey.trim()) {
-        addProviderKey(created.id, {
-          label: 'primary',
-          apiKey: routerKey.trim(),
-        });
-      }
-      logger.info({ provider: created.name, baseUrl: created.baseUrl }, 'Provider default berhasil di-seed dari .env');
-    } catch (err) {
-      logger.warn({ err }, 'Gagal melakukan seed provider default dari ROUTER_URL');
-    }
-  }
-}
-
-export function backfillProviderModelsAndNormalizeSettings(): void {
-  const db = getDb();
+export function normalizeModelSettings(): void {
   const settings = getSettings();
-  const providers = db
-    .prepare('SELECT * FROM providers ORDER BY priority ASC, id ASC')
-    .all() as unknown as ProviderRow[];
 
-  if (providers.length === 1 && !providers[0].model && settings.model) {
-    const rawModel = settings.model.trim();
-    const prefix = `${providers[0].name}/`;
-    const cleanModel = rawModel.startsWith(prefix) ? rawModel.slice(prefix.length) : rawModel;
-    if (cleanModel && cleanModel.length <= 120) {
-      db.prepare('UPDATE providers SET model = ? WHERE id = ?').run(cleanModel, providers[0].id);
-    }
-  }
-
-  // Normalisasi settings.model bila hanya 1 provider dan belum berformat provider/model
   if (settings.model) {
     const trimmed = settings.model.trim();
     if (trimmed !== settings.model) {
@@ -538,74 +573,45 @@ export function backfillProviderModelsAndNormalizeSettings(): void {
   }
 }
 
+let modelRoundRobinIndex = 0;
+
+/**
+ * Model utama dan cadangan dipilih sepenuhnya admin di tab Model; provider hanya
+ * menyediakan endpoint dan API key, sehingga tidak ada model default per provider.
+ * Mendukung mode fallback (urut), round_robin (rotasi bergiliran), dan fusion.
+ */
 export function buildModelPlan(
   settings: Settings,
   opts?: { advance?: boolean }
-): { model: string; fallbackModels: string[] } {
-  const manualModel = (settings.model ?? '').trim();
-  const manualFallbacks = (settings.fallback_models ?? [])
+): { model: string; fallbackModels: string[]; mode: ModelRoutingMode } {
+  const mode: ModelRoutingMode = settings.model_mode || 'fallback';
+  const model = (settings.model ?? '').trim();
+  const fallbackModels = (settings.fallback_models ?? [])
     .map((m) => m.trim())
-    .filter((m) => m.length > 0 && m !== manualModel);
+    .filter((m) => m.length > 0 && m !== model);
 
-  if (settings.llm_strategy === 'manual') {
-    return { model: manualModel, fallbackModels: manualFallbacks };
+  const allModels = model ? [model, ...fallbackModels] : [...fallbackModels];
+  if (allModels.length === 0) {
+    return { model: '', fallbackModels: [], mode };
   }
 
-  const db = getDb();
-  const providers = db
-    .prepare('SELECT * FROM providers WHERE enabled = 1 ORDER BY priority ASC, id ASC')
-    .all() as unknown as ProviderRow[];
-  const allKeys = db
-    .prepare('SELECT * FROM provider_keys ORDER BY id ASC')
-    .all() as unknown as ProviderKeyRow[];
-
-  const keysByProv = new Map<number, ProviderKeyRow[]>();
-  for (const k of allKeys) {
-    const arr = keysByProv.get(k.provider_id) ?? [];
-    arr.push(k);
-    keysByProv.set(k.provider_id, arr);
-  }
-
-  const now = Date.now();
-  const healthy: ProviderRow[] = [];
-  const unhealthy: ProviderRow[] = [];
-
-  for (const p of providers) {
-    if (!p.model.trim()) continue;
-    const pKeys = keysByProv.get(p.id) ?? [];
-    const enabledKeys = pKeys.filter((k) => k.enabled === 1);
-    if (pKeys.length > 0 && enabledKeys.length === 0) {
-      continue;
+  if (mode === 'round_robin' && allModels.length > 1) {
+    const startIdx = modelRoundRobinIndex % allModels.length;
+    if (opts?.advance) {
+      modelRoundRobinIndex = (modelRoundRobinIndex + 1) % 1_000_000;
     }
-    const isHealthy =
-      pKeys.length === 0 || enabledKeys.some((k) => k.cooldown_until <= now);
-    if (isHealthy) {
-      healthy.push(p);
-    } else {
-      unhealthy.push(p);
-    }
+    const rotated = allModels.slice(startIdx).concat(allModels.slice(0, startIdx));
+    return {
+      model: rotated[0],
+      fallbackModels: rotated.slice(1),
+      mode,
+    };
   }
-
-  if (healthy.length === 0 && unhealthy.length === 0) {
-    return { model: manualModel, fallbackModels: manualFallbacks };
-  }
-
-  let orderedHealthy = healthy;
-  if (settings.llm_strategy === 'round_robin' && healthy.length > 0) {
-    const startIdx = providerCounter % healthy.length;
-    orderedHealthy = [...healthy.slice(startIdx), ...healthy.slice(0, startIdx)];
-    if (opts?.advance !== false) {
-      providerCounter = (providerCounter + 1) % 1_000_000;
-    }
-  }
-
-  const candidates = [...orderedHealthy, ...unhealthy].map(
-    (p) => `${p.name}/${p.model.trim()}`
-  );
 
   return {
-    model: candidates[0] ?? '',
-    fallbackModels: candidates.slice(1),
+    model: allModels[0] || '',
+    fallbackModels: allModels.slice(1),
+    mode,
   };
 }
 
@@ -613,6 +619,7 @@ export interface ResolvedTarget {
   providerId: number;
   providerName: string;
   baseUrl: string;
+  format: ProviderFormat;
   modelName: string;
   fullModelLabel: string;
   keyId: number;
@@ -643,13 +650,13 @@ export function resolveModel(
         return null;
       }
       providerRow = byName;
-      modelName = rest || byName.model.trim();
+      modelName = rest;
     }
   }
 
   if (!providerRow) {
     providerRow = db
-      .prepare('SELECT * FROM providers WHERE enabled = 1 ORDER BY priority ASC, id ASC LIMIT 1')
+      .prepare('SELECT * FROM providers WHERE enabled = 1 ORDER BY id ASC LIMIT 1')
       .get() as unknown as ProviderRow | undefined;
   }
 
@@ -666,6 +673,7 @@ export function resolveModel(
       providerId: providerRow.id,
       providerName: providerRow.name,
       baseUrl: providerRow.base_url,
+      format: parseProviderFormat(providerRow.format) ?? 'openai',
       modelName,
       fullModelLabel: `${providerRow.name}/${modelName}`,
       keyId: 0,
@@ -712,6 +720,7 @@ export function resolveModel(
     providerId: providerRow.id,
     providerName: providerRow.name,
     baseUrl: providerRow.base_url,
+    format: parseProviderFormat(providerRow.format) ?? 'openai',
     modelName,
     fullModelLabel: `${providerRow.name}/${modelName}`,
     keyId: chosen.id,
@@ -724,7 +733,7 @@ export function getEffectivePlanAndRouterUrl(settings: Settings): {
   model: string;
   routerUrl: string;
 } {
-  const plan = buildModelPlan(settings, { advance: false });
+  const plan = buildModelPlan(settings);
   const firstCandidate = plan.model || plan.fallbackModels[0] || '';
   if (firstCandidate) {
     const resolved = resolveModel(firstCandidate, { advance: false });
@@ -738,11 +747,11 @@ export function getEffectivePlanAndRouterUrl(settings: Settings): {
 
   const db = getDb();
   const topProv = db
-    .prepare('SELECT name, base_url, model FROM providers WHERE enabled = 1 ORDER BY priority ASC, id ASC LIMIT 1')
-    .get() as { name: string; base_url: string; model: string } | undefined;
+    .prepare('SELECT base_url FROM providers WHERE enabled = 1 ORDER BY id ASC LIMIT 1')
+    .get() as { base_url: string } | undefined;
 
   return {
-    model: plan.model || (topProv?.model ? `${topProv.name}/${topProv.model}` : ''),
+    model: plan.model,
     routerUrl: topProv?.base_url ?? '',
   };
 }

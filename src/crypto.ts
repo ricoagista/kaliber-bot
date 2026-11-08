@@ -9,8 +9,12 @@ const MAX_CACHE_ENTRIES = 200;
 let derivedKek: Buffer | null = null;
 let rawSecretKey = '';
 
-let revealSalt: Buffer | null = null;
-let revealHash: Buffer | null = null;
+interface RevealHashEntry {
+  salt: Buffer;
+  hash: Buffer;
+}
+
+let revealHashes: RevealHashEntry[] = [];
 
 const decryptedKeys = new Map<number, string>();
 
@@ -30,31 +34,36 @@ function getKek(): Buffer {
   return derivedKek;
 }
 
-export function setRevealPassword(password: string): void {
-  if (!password) {
-    revealSalt = null;
-    revealHash = null;
-    return;
+export function setRevealPassword(revealPassword?: string, adminToken?: string): void {
+  revealHashes = [];
+  const candidates = new Set<string>();
+  if (revealPassword && revealPassword.length >= 12) {
+    candidates.add(revealPassword);
   }
-  if (password.length < 12) {
-    throw new Error('REVEAL_PASSWORD minimal 12 karakter.');
+  if (adminToken && adminToken.length >= 12) {
+    candidates.add(adminToken);
   }
-  const salt = crypto.randomBytes(16);
-  revealSalt = salt;
-  revealHash = crypto.scryptSync(password.slice(0, 256), salt, 32);
+
+  for (const pw of candidates) {
+    const salt = crypto.randomBytes(16);
+    const hash = crypto.scryptSync(pw.slice(0, 256), salt, 32);
+    revealHashes.push({ salt, hash });
+  }
 }
 
 export function hasRevealPassword(): boolean {
-  return revealSalt !== null && revealHash !== null;
+  return revealHashes.length > 0;
 }
 
 export function verifyRevealPassword(password: string): boolean {
-  if (!revealSalt || !revealHash) return false;
+  if (revealHashes.length === 0) return false;
   if (typeof password !== 'string' || password.length === 0 || password.length > 256) {
     return false;
   }
-  const candidate = crypto.scryptSync(password, revealSalt, 32);
-  return crypto.timingSafeEqual(candidate, revealHash);
+  return revealHashes.some(({ salt, hash }) => {
+    const candidate = crypto.scryptSync(password, salt, 32);
+    return crypto.timingSafeEqual(candidate, hash);
+  });
 }
 
 export function encryptApiKey(plainKey: string): string {

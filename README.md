@@ -81,7 +81,6 @@ nano ~/.config/kaliber-bot/env
 Pastikan di `~/.config/kaliber-bot/env`:
 - `ADMIN_TOKEN` (minimal 24 karakter) dan `SECRET_KEY` (minimal 32 karakter) sudah diisi.
 - Jika Web Admin diakses melalui Cloudflare Tunnel, set `TRUST_PROXY=true`.
-- Jika menggunakan 9router lokal di host, `ROUTER_URL=http://host.containers.internal:20128/v1`.
 
 ### 3.4. Pasang Unit Quadlet systemd
 
@@ -120,9 +119,10 @@ journalctl --user -u kaliber-bot.service -f
    - Gunakan nomor WhatsApp terpisah khusus untuk bot (jangan gunakan nomor pribadi utama pengurus).
    - Buka tab **Ringkasan** di Web Admin, lalu pindai kode QR atau masukkan nomor telepon bot pada form **Pairing Code** untuk mendapatkan kode 8 karakter.
 2. **Konfigurasi Provider & Model**:
-   - Buka tab **Provider**, tambahkan provider OpenAI-compatible (maksimal 5 provider, maksimal 20 API key per provider).
-   - Klik **Tes** pada key untuk memastikan status `Valid`.
-   - Pilih **Mode penggunaan** (`manual`, `round_robin`, atau `priority`).
+   - Buka tab **Provider**, tambahkan provider berformat OpenAI-compatible atau Anthropic (API key wajib diisi; maksimal 5 provider, maksimal 5 API key per provider).
+   - Klik **Tes** pada key atau **Tes koneksi** provider untuk memastikan status `Valid`.
+   - Gunakan tombol **Lihat model** untuk melihat tabel model yang tersedia pada endpoint tersebut.
+   - Buka tab **Model**, pilih **Mode Routing** (`fallback`, `round_robin`, atau `fusion`) dan kelola daftar prioritas model (hingga 20 model). Urutan nomor 1 otomatis menjadi Model Utama, urutan berikutnya menjadi Model Cadangan / Fallback. Gunakan tombol panah (↑/↓) untuk mengatur prioritas atau tombol **+ Tambah Model** untuk menambah model dari provider aktif.
 3. **Isi Knowledge Base & Prompt**:
    - Buka tab **Knowledge**, ganti seluruh bagian `TODO` dengan informasi resmi LSO Kaliber, lalu klik **Simpan**.
    - Buka tab **Prompt**, sesuaikan `Kontak Pengurus ({{CONTACT}})` dan instruksi bila diperlukan.
