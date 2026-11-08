@@ -1,0 +1,3495 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaliber Bot - Panel Admin</title>
+  <link rel="icon" type="image/avif" href="/kaliber.avif">
+  <script>
+    (function () {
+      var saved = null;
+      try {
+        saved = localStorage.getItem('kaliber_theme');
+      } catch (e) {}
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var theme = saved === 'dark' || saved === 'light' ? saved : (prefersDark ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+  <style>
+    /* Token mengikuti DESIGN.md (gaya terinspirasi Notion, bukan aset resmi) */
+    /* Skala z-index: header = 10, modal = 100, toast = 110 */
+    :root {
+      --bg-page: #fafaf9;
+      --bg-surface: #ffffff;
+      --bg-elevated: #ffffff;
+      --bg-subtle: #f0eeec;
+      --text-primary: #1a1a1a;
+      --text-secondary: #5d5b54;
+      --border-hairline: #e5e3df;
+      --border-control: #8f8b84;
+      --color-primary: #5645d4;
+      --color-primary-pressed: #4534b3;
+      --on-primary: #ffffff;
+      --focus-ring: #5645d4;
+      --color-link: #005bab;
+
+      --badge-success-bg: #d9f3e1;
+      --badge-success-text: #0f6b22;
+      --badge-warn-bg: #ffe8d4;
+      --badge-warn-text: #a24100;
+      --badge-error-bg: #fde0ec;
+      --badge-error-text: #b42318;
+      --badge-neutral-bg: #f0eeec;
+      --badge-neutral-text: #5d5b54;
+
+      --shadow-card: 0 2px 8px rgba(26, 26, 26, 0.05);
+      --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+      --backdrop-modal: rgba(10, 21, 48, 0.48);
+
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-full: 9999px;
+
+      --space-xxs: 4px;
+      --space-xs: 8px;
+      --space-sm: 12px;
+      --space-md: 16px;
+      --space-lg: 20px;
+      --space-xl: 24px;
+      --space-xxl: 32px;
+
+      --font-sans: Inter, -apple-system, system-ui, "Segoe UI", Helvetica, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    [data-theme="dark"] {
+      --bg-page: #070f24;
+      --bg-surface: #0a1530;
+      --bg-elevated: #111d3d;
+      --bg-subtle: #1a2a52;
+      --text-primary: #e6e8ef;
+      --text-secondary: #a4a097;
+      --border-hairline: #1a2a52;
+      --border-control: #5a6a95;
+      --color-primary: #5645d4;
+      --color-primary-pressed: #4534b3;
+      --on-primary: #ffffff;
+      --focus-ring: #d6b6f6;
+      --color-link: #d6b6f6;
+
+      --badge-success-bg: #0d2e1b;
+      --badge-success-text: #1aae39;
+      --badge-warn-bg: #332010;
+      --badge-warn-text: #f0a35c;
+      --badge-error-bg: #381523;
+      --badge-error-text: #ff8a8a;
+      --badge-neutral-bg: #1a2a52;
+      --badge-neutral-text: #a4a097;
+
+      --shadow-card: 0 2px 8px rgba(7, 15, 36, 0.35);
+      --shadow-modal: 0 16px 48px -8px rgba(7, 15, 36, 0.65);
+      --backdrop-modal: rgba(7, 15, 36, 0.72);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg-page);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 16px;
+      line-height: 1.55;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, select, textarea {
+      font-family: inherit;
+      color: inherit;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 2px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Pembungkus Logo Kaliber (4320x4320 transparan, dipotong perisai) */
+    .logo-crop-header {
+      position: relative;
+      width: 24px;
+      height: 32px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .logo-crop-header img {
+      position: absolute;
+      width: 38px;
+      height: 38px;
+      left: -7px;
+      top: -3px;
+      max-width: none;
+      display: block;
+    }
+
+    .logo-crop-login {
+      position: relative;
+      width: 53px;
+      height: 72px;
+      overflow: hidden;
+      margin: 0 auto var(--space-md) auto;
+    }
+    .logo-crop-login img {
+      position: absolute;
+      width: 85px;
+      height: 85px;
+      left: -16px;
+      top: -7px;
+      max-width: none;
+      display: block;
+    }
+
+    /* Layar Login */
+    .login-shell {
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-md);
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 420px;
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-lg);
+      padding: var(--space-xxl) var(--space-xl);
+      box-shadow: var(--shadow-card);
+    }
+
+    .login-title {
+      margin: 0 0 var(--space-xs) 0;
+      font-size: 22px;
+      font-weight: 600;
+      line-height: 1.3;
+      text-align: center;
+    }
+
+    .login-subtitle {
+      margin: 0 0 var(--space-xl) 0;
+      font-size: 14px;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+
+    /* Header & Navigasi */
+    .app-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      height: 64px;
+      background-color: var(--bg-surface);
+      border-bottom: 1px solid var(--border-hairline);
+    }
+
+    .header-inner {
+      max-width: 1120px;
+      height: 100%;
+      margin: 0 auto;
+      padding: 0 var(--space-xl);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-md);
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      min-width: 0;
+    }
+
+    .brand-name {
+      font-size: 16px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-xs);
+    }
+
+    .tabs-bar {
+      background-color: var(--bg-surface);
+      border-bottom: 1px solid var(--border-hairline);
+    }
+
+    .tabs-inner {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 var(--space-xl);
+      display: flex;
+      gap: var(--space-xs);
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+
+    .segmented-tab {
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 500;
+      padding: var(--space-sm) var(--space-md);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 150ms ease, transform 150ms ease;
+    }
+
+    .segmented-tab:hover {
+      color: var(--text-primary);
+    }
+
+    .segmented-tab[aria-selected="true"] {
+      color: var(--text-primary);
+      border-bottom-color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    /* Kontainer Utama */
+    .main-container {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: var(--space-xl);
+    }
+
+    @media (max-width: 767px) {
+      .header-inner,
+      .tabs-inner,
+      .main-container {
+        padding-left: var(--space-md);
+        padding-right: var(--space-md);
+      }
+      .brand-name {
+        font-size: 15px;
+      }
+    }
+
+    /* Kartu & Seksi */
+    .card-base {
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-lg);
+      padding: var(--space-xl);
+      margin-bottom: var(--space-xl);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-md);
+      margin-bottom: var(--space-md);
+      flex-wrap: wrap;
+    }
+
+    .card-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .card-desc {
+      margin: var(--space-xxs) 0 0 0;
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    /* Tombol */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 40px;
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 1.3;
+      border-radius: var(--radius-md);
+      border: 1px solid transparent;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: transform 120ms ease, opacity 120ms ease;
+    }
+
+    .btn:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background-color: var(--color-primary);
+      color: var(--on-primary);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background-color: var(--color-primary-pressed);
+    }
+
+    .btn-secondary {
+      background-color: transparent;
+      color: var(--text-primary);
+      border-color: var(--border-control);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background-color: var(--bg-subtle);
+    }
+
+    .btn-danger {
+      background-color: var(--badge-error-bg);
+      color: var(--badge-error-text);
+      border-color: var(--border-control);
+    }
+
+    .btn-sm {
+      min-height: 34px;
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+
+    /* Form & Input */
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-xs);
+      margin-bottom: var(--space-md);
+    }
+
+    .field-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-xs);
+    }
+
+    .field-hint {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+
+    .field-error {
+      font-size: 13px;
+      color: var(--badge-error-text);
+      background-color: var(--badge-error-bg);
+      padding: var(--space-xs) var(--space-sm);
+      border-radius: var(--radius-md);
+      margin-top: var(--space-xxs);
+    }
+
+    .field-warn {
+      font-size: 13px;
+      color: var(--badge-warn-text);
+      background-color: var(--badge-warn-bg);
+      padding: var(--space-xs) var(--space-sm);
+      border-radius: var(--radius-md);
+      margin-top: var(--space-xxs);
+    }
+
+    .field-success {
+      font-size: 13px;
+      color: var(--badge-success-text);
+      background-color: var(--badge-success-bg);
+      padding: var(--space-xs) var(--space-sm);
+      border-radius: var(--radius-md);
+      margin-top: var(--space-xxs);
+    }
+
+    .text-input,
+    .select-input {
+      width: 100%;
+      height: 44px;
+      padding: 10px 14px;
+      font-size: 15px;
+      background-color: var(--bg-surface);
+      color: var(--text-primary);
+      border: 1px solid var(--border-control);
+      border-radius: var(--radius-md);
+    }
+
+    .text-input:read-only,
+    .text-input:disabled,
+    .select-input:disabled,
+    .textarea-input:disabled {
+      background-color: var(--bg-subtle);
+      color: var(--text-secondary);
+      cursor: not-allowed;
+    }
+
+    .textarea-input {
+      width: 100%;
+      min-height: 120px;
+      padding: 12px 14px;
+      font-size: 14px;
+      line-height: 1.5;
+      background-color: var(--bg-surface);
+      color: var(--text-primary);
+      border: 1px solid var(--border-control);
+      border-radius: var(--radius-md);
+      resize: vertical;
+    }
+
+    .mono {
+      font-family: var(--font-mono);
+    }
+
+    .form-grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-md);
+    }
+
+    .form-grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-md);
+    }
+
+    @media (max-width: 767px) {
+      .form-grid-2,
+      .form-grid-3 {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .form-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-md);
+      padding-top: var(--space-md);
+      border-top: 1px solid var(--border-hairline);
+      flex-wrap: wrap;
+    }
+
+    .btn-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-xs);
+      flex-wrap: wrap;
+    }
+
+    /* Saklar Checkbox Baris */
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-md);
+      padding: var(--space-sm) 0;
+      border-bottom: 1px solid var(--border-hairline);
+    }
+    .switch-row:last-child {
+      border-bottom: none;
+    }
+    .switch-input {
+      width: 20px;
+      height: 20px;
+      accent-color: var(--color-primary);
+      cursor: pointer;
+    }
+
+    /* Badge (pil hanya untuk badge) */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.4;
+      border-radius: var(--radius-full);
+      white-space: nowrap;
+    }
+
+    .badge-success {
+      background-color: var(--badge-success-bg);
+      color: var(--badge-success-text);
+    }
+    .badge-warn {
+      background-color: var(--badge-warn-bg);
+      color: var(--badge-warn-text);
+    }
+    .badge-error {
+      background-color: var(--badge-error-bg);
+      color: var(--badge-error-text);
+    }
+    .badge-neutral {
+      background-color: var(--badge-neutral-bg);
+      color: var(--badge-neutral-text);
+    }
+
+    /* Ringkasan Metrik Polos (bukan kartu di dalam kartu) */
+    .metrics-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--space-lg);
+      padding: var(--space-md) 0;
+      border-top: 1px solid var(--border-hairline);
+      border-bottom: 1px solid var(--border-hairline);
+      margin-bottom: var(--space-xl);
+    }
+
+    @media (max-width: 900px) {
+      .metrics-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 480px) {
+      .metrics-strip {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .metric-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .metric-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+
+    .metric-value {
+      font-size: 22px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      word-break: break-word;
+    }
+
+    .metric-value-sm {
+      font-size: 14px;
+      font-weight: 500;
+      font-family: var(--font-mono);
+      word-break: break-all;
+    }
+
+    /* QR & Pairing */
+    .wa-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: var(--space-xl);
+      align-items: start;
+    }
+
+    @media (max-width: 767px) {
+      .wa-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .qr-box {
+      width: 256px;
+      height: 256px;
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-xs);
+      background-color: var(--bg-surface);
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .qr-box img {
+      max-width: 100%;
+      max-height: 100%;
+      display: block;
+    }
+
+    .pairing-code-display {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-sm);
+      padding: var(--space-sm) var(--space-md);
+      background-color: var(--bg-subtle);
+      border: 1px solid var(--border-control);
+      border-radius: var(--radius-md);
+      font-family: var(--font-mono);
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      margin-top: var(--space-sm);
+    }
+
+    /* Daftar Provider & Key (dipisahkan garis, bukan kotak di dalam kotak) */
+    .provider-list {
+      border-top: 1px solid var(--border-hairline);
+    }
+
+    .provider-block {
+      padding: var(--space-lg) 0;
+      border-bottom: 1px solid var(--border-hairline);
+    }
+
+    .provider-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-md);
+      flex-wrap: wrap;
+      margin-bottom: var(--space-md);
+    }
+
+    .provider-title-group {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      flex-wrap: wrap;
+    }
+
+    .key-list {
+      margin-top: var(--space-md);
+      border-top: 1px solid var(--border-hairline);
+    }
+
+    .key-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-md);
+      padding: var(--space-sm) 0;
+      border-bottom: 1px solid var(--border-hairline);
+      flex-wrap: wrap;
+    }
+
+    .key-info {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      flex-wrap: wrap;
+    }
+
+    /* Kotak Uji Coba Chat */
+    .chat-transcript {
+      min-height: 260px;
+      max-height: 460px;
+      overflow-y: auto;
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-md);
+      padding: var(--space-md);
+      margin-bottom: var(--space-md);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-md);
+      background-color: var(--bg-page);
+    }
+
+    .chat-item {
+      padding-bottom: var(--space-sm);
+      border-bottom: 1px solid var(--border-hairline);
+    }
+    .chat-item:last-child {
+      border-bottom: none;
+    }
+
+    .chat-role {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .chat-bubble {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 14px;
+    }
+
+    .chat-meta {
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: var(--space-xs);
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* Tabel Log & Audit */
+    .comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+
+    .comparison-table th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      padding: var(--space-sm) var(--space-md);
+      border-bottom: 1px solid var(--border-hairline);
+      background-color: var(--bg-subtle);
+    }
+
+    .comparison-table td {
+      padding: var(--space-sm) var(--space-md);
+      border-bottom: 1px solid var(--border-hairline);
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    .comparison-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    @media (max-width: 767px) {
+      .comparison-table,
+      .comparison-table thead,
+      .comparison-table tbody,
+      .comparison-table th,
+      .comparison-table td,
+      .comparison-table tr {
+        display: block;
+      }
+      .comparison-table thead {
+        display: none;
+      }
+      .comparison-table tr {
+        padding: var(--space-sm) var(--space-md);
+        border-bottom: 1px solid var(--border-hairline);
+      }
+      .comparison-table td {
+        padding: 4px 0;
+        border: none;
+      }
+      .comparison-table td::before {
+        content: attr(data-label) ": ";
+        font-weight: 600;
+        color: var(--text-secondary);
+      }
+    }
+
+    /* Skeleton & Empty State */
+    .skeleton-line {
+      height: 18px;
+      background-color: var(--bg-subtle);
+      border-radius: var(--radius-sm);
+      margin-bottom: var(--space-xs);
+    }
+
+    .empty-state {
+      padding: var(--space-xl);
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 14px;
+      border: 1px dashed var(--border-control);
+      border-radius: var(--radius-md);
+    }
+
+    /* Modal & Toast */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background-color: var(--backdrop-modal);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-md);
+    }
+
+    .modal-box {
+      width: 100%;
+      max-width: 480px;
+      background-color: var(--bg-elevated);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-lg);
+      padding: var(--space-xl);
+      box-shadow: var(--shadow-modal);
+      max-height: 90dvh;
+      overflow-y: auto;
+    }
+
+    .toast-region {
+      position: fixed;
+      bottom: var(--space-lg);
+      right: var(--space-lg);
+      z-index: 110;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-xs);
+      max-width: 360px;
+    }
+
+    .toast-item {
+      background-color: var(--bg-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border-control);
+      border-radius: var(--radius-md);
+      padding: var(--space-sm) var(--space-md);
+      box-shadow: var(--shadow-modal);
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Layar Login -->
+  <main id="login-view" class="login-shell hidden">
+    <section class="login-card" aria-labelledby="login-heading">
+      <div class="logo-crop-login">
+        <img src="/kaliber.avif" alt="Logo Kaliber" width="85" height="85" decoding="async" fetchpriority="high">
+      </div>
+      <h1 id="login-heading" class="login-title">Kaliber Bot Admin</h1>
+      <p class="login-subtitle">Masukkan token admin untuk mengelola chatbot LSO Kaliber.</p>
+      <form id="login-form" novalidate>
+        <div class="field-group">
+          <label class="field-label" for="login-token-input">Token Admin</label>
+          <input id="login-token-input" class="text-input mono" type="password" autocomplete="current-password" required>
+          <div id="login-error" class="field-error hidden" role="alert"></div>
+        </div>
+        <button id="login-submit-btn" type="submit" class="btn btn-primary" style="width: 100%;">Masuk</button>
+      </form>
+    </section>
+  </main>
+
+  <!-- Aplikasi Utama -->
+  <div id="app-view" class="hidden">
+    <header class="app-header">
+      <div class="header-inner">
+        <div class="brand-group">
+          <div class="logo-crop-header">
+            <img src="/kaliber.avif" alt="Logo Kaliber" width="38" height="38" decoding="async">
+          </div>
+          <span class="brand-name">Kaliber Bot</span>
+          <span id="header-bot-badge" class="badge badge-neutral">Memuat</span>
+        </div>
+        <div class="header-actions">
+          <button id="theme-toggle-btn" type="button" class="btn btn-secondary btn-sm">Tema</button>
+          <button id="logout-admin-btn" type="button" class="btn btn-secondary btn-sm">Keluar</button>
+        </div>
+      </div>
+    </header>
+
+    <nav class="tabs-bar" aria-label="Menu utama">
+      <div id="tabs-nav" class="tabs-inner" role="tablist"></div>
+    </nav>
+
+    <main id="tab-content" class="main-container"></main>
+  </div>
+
+  <!-- Datalist global untuk pilihan model -->
+  <datalist id="global-models-datalist"></datalist>
+
+  <!-- Modal Dinamis -->
+  <div id="modal-root" class="modal-backdrop hidden" role="dialog" aria-modal="true"></div>
+
+  <!-- Region Toast -->
+  <div id="toast-root" class="toast-region" aria-live="polite"></div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var SESSION_TOKEN_KEY = 'kaliber_admin_token';
+      var THEME_KEY = 'kaliber_theme';
+
+      var TABS = [
+        { id: 'ringkasan', label: 'Ringkasan' },
+        { id: 'prompt', label: 'Prompt' },
+        { id: 'knowledge', label: 'Knowledge' },
+        { id: 'provider', label: 'Provider' },
+        { id: 'model', label: 'Model' },
+        { id: 'guard', label: 'Guard' },
+        { id: 'ujicoba', label: 'Uji Coba' },
+        { id: 'log', label: 'Log' }
+      ];
+
+      var state = {
+        activeTab: 'ringkasan',
+        status: null,
+        settings: null,
+        defaults: null,
+        limits: { knowledge_warn_chars: 12000, body_bytes: 65536 },
+        hasRevealPassword: false,
+        providersData: { providers: [], maxProviders: 5, maxKeysPerProvider: 20, serverNow: Date.now() },
+        modelsList: [],
+        logs: [],
+        audit: [],
+        chatHistory: [],
+        summaryTimer: null,
+        revealClearTimer: null
+      };
+
+      /* Helper DOM berbasis createElement dan textContent */
+      function clearEl(node) {
+        while (node.firstChild) {
+          node.removeChild(node.firstChild);
+        }
+      }
+
+      function el(tag, attrs, children) {
+        var element = document.createElement(tag);
+        if (attrs) {
+          var keys = Object.keys(attrs);
+          for (var i = 0; i < keys.length; i++) {
+            var k = keys[i];
+            var v = attrs[k];
+            if (v === undefined || v === null || v === false) continue;
+            if (k === 'className') {
+              element.className = String(v);
+            } else if (k === 'textContent') {
+              element.textContent = String(v);
+            } else if (k === 'checked' || k === 'disabled' || k === 'readOnly' || k === 'required' || k === 'selected') {
+              element[k] = Boolean(v);
+            } else if (k.indexOf('on') === 0 && typeof v === 'function') {
+              element.addEventListener(k.slice(2).toLowerCase(), v);
+            } else {
+              element.setAttribute(k, String(v));
+            }
+          }
+        }
+        if (children !== undefined && children !== null) {
+          appendChildren(element, children);
+        }
+        return element;
+      }
+
+      function appendChildren(parent, children) {
+        if (Array.isArray(children)) {
+          for (var i = 0; i < children.length; i++) {
+            appendChildren(parent, children[i]);
+          }
+        } else if (typeof children === 'string' || typeof children === 'number') {
+          parent.appendChild(document.createTextNode(String(children)));
+        } else if (children instanceof Node) {
+          parent.appendChild(children);
+        }
+      }
+
+      /* Penyimpanan Token & Tema */
+      function getToken() {
+        try {
+          return sessionStorage.getItem(SESSION_TOKEN_KEY) || '';
+        } catch (e) {
+          return '';
+        }
+      }
+
+      function setToken(token) {
+        try {
+          if (token) {
+            sessionStorage.setItem(SESSION_TOKEN_KEY, token);
+          } else {
+            sessionStorage.removeItem(SESSION_TOKEN_KEY);
+          }
+        } catch (e) {}
+      }
+
+      function getCurrentTheme() {
+        return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+      }
+
+      function updateThemeButtonLabel() {
+        var btn = document.getElementById('theme-toggle-btn');
+        if (!btn) return;
+        btn.textContent = getCurrentTheme() === 'dark' ? 'Mode Terang' : 'Mode Gelap';
+      }
+
+      function toggleTheme() {
+        var next = getCurrentTheme() === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        try {
+          localStorage.setItem(THEME_KEY, next);
+        } catch (e) {}
+        updateThemeButtonLabel();
+      }
+
+      /* Toast */
+      function showToast(message) {
+        var root = document.getElementById('toast-root');
+        if (!root) return;
+        var item = el('div', { className: 'toast-item', textContent: message });
+        root.appendChild(item);
+        setTimeout(function () {
+          if (item.parentNode) {
+            item.parentNode.removeChild(item);
+          }
+        }, 4000);
+      }
+
+      /* Modal */
+      function closeModal() {
+        if (state.revealClearTimer) {
+          clearTimeout(state.revealClearTimer);
+          state.revealClearTimer = null;
+        }
+        var root = document.getElementById('modal-root');
+        if (!root) return;
+        clearEl(root);
+        root.classList.add('hidden');
+      }
+
+      function openModal(contentNode) {
+        closeModal();
+        var root = document.getElementById('modal-root');
+        if (!root) return;
+        var box = el('div', { className: 'modal-box' }, [contentNode]);
+        root.appendChild(box);
+        root.classList.remove('hidden');
+      }
+
+      function openConfirmModal(opts) {
+        var errBox = el('div', { className: 'field-error hidden' });
+        var confirmBtn = el('button', {
+          type: 'button',
+          className: opts.danger ? 'btn btn-danger' : 'btn btn-primary',
+          textContent: opts.confirmLabel || 'Konfirmasi',
+          onClick: function () {
+            confirmBtn.disabled = true;
+            Promise.resolve(opts.onConfirm())
+              .then(function () {
+                closeModal();
+              })
+              .catch(function (err) {
+                confirmBtn.disabled = false;
+                errBox.textContent = err && err.message ? err.message : 'Gagal menjalankan aksi.';
+                errBox.classList.remove('hidden');
+              });
+          }
+        });
+        var cancelBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-secondary',
+          textContent: 'Batal',
+          onClick: closeModal
+        });
+
+        var node = el('div', null, [
+          el('h2', { className: 'card-title', textContent: opts.title }),
+          el('p', { className: 'card-desc', style: 'margin: 12px 0 20px 0;', textContent: opts.message }),
+          errBox,
+          el('div', { className: 'btn-row', style: 'justify-content: flex-end; margin-top: 16px;' }, [
+            cancelBtn,
+            confirmBtn
+          ])
+        ]);
+        openModal(node);
+      }
+
+      /* Pemanggilan API */
+      function apiFetch(path, options) {
+        var opts = options || {};
+        var headers = { Accept: 'application/json' };
+        var token = opts.tokenOverride !== undefined ? opts.tokenOverride : getToken();
+        if (token) {
+          headers.Authorization = 'Bearer ' + token;
+        }
+        if (opts.body !== undefined) {
+          headers['Content-Type'] = 'application/json';
+        }
+
+        return fetch(path, {
+          method: opts.method || 'GET',
+          headers: headers,
+          body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined
+        }).then(function (res) {
+          return res.json().catch(function () { return {}; }).then(function (data) {
+            if (res.status === 401) {
+              if (!opts.skipAuthRedirect) {
+                handleUnauthorized();
+              }
+              var err401 = new Error(data.error || 'Token tidak valid.');
+              err401.status = 401;
+              throw err401;
+            }
+            if (res.status === 429) {
+              var err429 = new Error('Terlalu banyak percobaan, coba lagi nanti.');
+              err429.status = 429;
+              throw err429;
+            }
+            if (!res.ok) {
+              var err = new Error(data.error || data.message || ('Permintaan gagal (HTTP ' + res.status + ')'));
+              err.status = res.status;
+              throw err;
+            }
+            return data;
+          });
+        });
+      }
+
+      /* Login & Sesi */
+      function handleUnauthorized() {
+        stopSummaryAutoRefresh();
+        setToken('');
+        document.getElementById('app-view').classList.add('hidden');
+        document.getElementById('login-view').classList.remove('hidden');
+      }
+
+      function showApp() {
+        document.getElementById('login-view').classList.add('hidden');
+        document.getElementById('app-view').classList.remove('hidden');
+        renderTabsNav();
+        switchTab(state.activeTab);
+      }
+
+      function updateHeaderBadge() {
+        var badge = document.getElementById('header-bot-badge');
+        if (!badge) return;
+        var botOn = state.status ? Boolean(state.status.botEnabled) : (state.settings ? Boolean(state.settings.bot_enabled) : false);
+        badge.textContent = botOn ? 'Bot Aktif' : 'Bot Nonaktif';
+        badge.className = 'badge ' + (botOn ? 'badge-success' : 'badge-neutral');
+      }
+
+      function populateGlobalModelsDatalist() {
+        var dl = document.getElementById('global-models-datalist');
+        if (!dl) return;
+        clearEl(dl);
+        var seen = {};
+        for (var i = 0; i < state.modelsList.length; i++) {
+          var group = state.modelsList[i];
+          var provName = group.provider || '';
+          var arr = Array.isArray(group.models) ? group.models : [];
+          for (var j = 0; j < arr.length; j++) {
+            var m = arr[j];
+            var full = provName ? (provName + '/' + m) : m;
+            if (!seen[full]) {
+              seen[full] = true;
+              dl.appendChild(el('option', { value: full }));
+            }
+            if (!seen[m]) {
+              seen[m] = true;
+              dl.appendChild(el('option', { value: m }));
+            }
+          }
+        }
+      }
+
+      /* Navigasi Tab */
+      function renderTabsNav() {
+        var nav = document.getElementById('tabs-nav');
+        if (!nav) return;
+        clearEl(nav);
+        for (var i = 0; i < TABS.length; i++) {
+          (function (tab) {
+            var btn = el('button', {
+              type: 'button',
+              role: 'tab',
+              className: 'segmented-tab',
+              'aria-selected': state.activeTab === tab.id ? 'true' : 'false',
+              textContent: tab.label,
+              onClick: function () {
+                switchTab(tab.id);
+              }
+            });
+            nav.appendChild(btn);
+          })(TABS[i]);
+        }
+      }
+
+      function stopSummaryAutoRefresh() {
+        if (state.summaryTimer) {
+          clearInterval(state.summaryTimer);
+          state.summaryTimer = null;
+        }
+      }
+
+      function startSummaryAutoRefresh() {
+        stopSummaryAutoRefresh();
+        state.summaryTimer = setInterval(function () {
+          if (state.activeTab === 'ringkasan' && document.visibilityState === 'visible') {
+            refreshSummarySilent();
+          }
+        }, 5000);
+      }
+
+      function switchTab(tabId) {
+        state.activeTab = tabId;
+        stopSummaryAutoRefresh();
+        renderTabsNav();
+        var container = document.getElementById('tab-content');
+        if (!container) return;
+
+        if (tabId === 'ringkasan') {
+          loadSummaryTab(container);
+          startSummaryAutoRefresh();
+        } else if (tabId === 'prompt') {
+          loadSettingsTab(container, renderPromptTab);
+        } else if (tabId === 'knowledge') {
+          loadSettingsTab(container, renderKnowledgeTab);
+        } else if (tabId === 'provider') {
+          loadProviderTab(container);
+        } else if (tabId === 'model') {
+          loadSettingsTab(container, renderModelTab);
+        } else if (tabId === 'guard') {
+          loadSettingsTab(container, renderGuardTab);
+        } else if (tabId === 'ujicoba') {
+          renderUjiCobaTab(container);
+        } else if (tabId === 'log') {
+          loadLogTab(container);
+        }
+      }
+
+      function renderSkeleton(container) {
+        clearEl(container);
+        container.appendChild(
+          el('div', { className: 'card-base' }, [
+            el('div', { className: 'skeleton-line', style: 'width: 35%;' }),
+            el('div', { className: 'skeleton-line', style: 'width: 80%;' }),
+            el('div', { className: 'skeleton-line', style: 'width: 65%;' })
+          ])
+        );
+      }
+
+      function formatDuration(sec) {
+        var s = Math.max(0, Math.floor(Number(sec) || 0));
+        var d = Math.floor(s / 86400);
+        var h = Math.floor((s % 86400) / 3600);
+        var m = Math.floor((s % 3600) / 60);
+        var rem = s % 60;
+        var parts = [];
+        if (d > 0) parts.push(d + 'h');
+        if (h > 0 || d > 0) parts.push(h + 'j');
+        if (m > 0 || h > 0 || d > 0) parts.push(m + 'm');
+        parts.push(rem + 'd');
+        return parts.join(' ');
+      }
+
+      function formatTimestamp(ms) {
+        if (!ms) return '-';
+        try {
+          return new Date(ms).toLocaleString('id-ID', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          });
+        } catch (e) {
+          return String(ms);
+        }
+      }
+
+      /* TAB 1: RINGKASAN */
+      function loadSummaryTab(container) {
+        renderSkeleton(container);
+        apiFetch('/api/status')
+          .then(function (data) {
+            state.status = data;
+            updateHeaderBadge();
+            if (state.activeTab === 'ringkasan') {
+              renderSummaryTab(container);
+            }
+          })
+          .catch(function (err) {
+            clearEl(container);
+            container.appendChild(
+              el('div', { className: 'card-base' }, [
+                el('div', { className: 'field-error', textContent: err.message || 'Gagal memuat status ringkasan.' }),
+                el('button', {
+                  type: 'button',
+                  className: 'btn btn-secondary',
+                  style: 'margin-top: 12px;',
+                  textContent: 'Muat ulang',
+                  onClick: function () { loadSummaryTab(container); }
+                })
+              ])
+            );
+          });
+      }
+
+      function refreshSummarySilent() {
+        apiFetch('/api/status')
+          .then(function (data) {
+            state.status = data;
+            updateHeaderBadge();
+            var activeEl = document.activeElement;
+            if (activeEl && activeEl.id === 'pairing-phone-input') {
+              return;
+            }
+            var container = document.getElementById('tab-content');
+            if (container && state.activeTab === 'ringkasan') {
+              renderSummaryTab(container);
+            }
+          })
+          .catch(function () {});
+      }
+
+      function mapWaStateBadge(waState) {
+        if (waState === 'open') return { text: 'Terhubung', cls: 'badge-success' };
+        if (waState === 'connecting') return { text: 'Menghubungkan', cls: 'badge-warn' };
+        if (waState === 'logged_out') return { text: 'Keluar Sesi', cls: 'badge-error' };
+        return { text: 'Terputus', cls: 'badge-neutral' };
+      }
+
+      function renderSummaryTab(container) {
+        clearEl(container);
+        var st = state.status || {};
+        var wa = st.wa || { state: 'disconnected', qrDataUrl: null, pairingCode: null, me: null, lastError: null };
+        var waBadge = mapWaStateBadge(wa.state);
+
+        /* Angka Ringkasan Polos (Label + Nilai) */
+        var metrics = el('section', { className: 'metrics-strip', 'aria-label': 'Statistik sistem' }, [
+          el('div', { className: 'metric-item' }, [
+            el('span', { className: 'metric-label', textContent: 'Uptime' }),
+            el('span', { className: 'metric-value', textContent: formatDuration(st.uptimeSec) })
+          ]),
+          el('div', { className: 'metric-item' }, [
+            el('span', { className: 'metric-label', textContent: 'Memori RSS' }),
+            el('span', { className: 'metric-value', textContent: (st.rssMb || 0) + ' MB' })
+          ]),
+          el('div', { className: 'metric-item' }, [
+            el('span', { className: 'metric-label', textContent: 'Pesan Hari Ini' }),
+            el('span', { className: 'metric-value', textContent: String(st.messagesToday || 0) })
+          ]),
+          el('div', { className: 'metric-item' }, [
+            el('span', { className: 'metric-label', textContent: 'Diblokir Hari Ini' }),
+            el('span', { className: 'metric-value', textContent: String(st.blockedToday || 0) })
+          ]),
+          el('div', { className: 'metric-item' }, [
+            el('span', { className: 'metric-label', textContent: 'Strike Aktif' }),
+            el('span', { className: 'metric-value', textContent: String(st.strikes || 0) })
+          ]),
+          el('div', { className: 'metric-item' }, [
+            el('span', { className: 'metric-label', textContent: 'Mute Aktif' }),
+            el('span', { className: 'metric-value', textContent: String(st.mutes || 0) })
+          ]),
+          el('div', { className: 'metric-item' }, [
+            el('span', { className: 'metric-label', textContent: 'Model Efektif' }),
+            el('span', { className: 'metric-value-sm', textContent: st.model || 'Belum diatur' })
+          ]),
+          el('div', { className: 'metric-item' }, [
+            el('span', { className: 'metric-label', textContent: 'Router URL' }),
+            el('span', { className: 'metric-value-sm', textContent: st.routerUrl || 'Belum diatur' })
+          ])
+        ]);
+
+        /* Saklar Bot */
+        var botToggleBtn = el('button', {
+          type: 'button',
+          className: st.botEnabled ? 'btn btn-secondary' : 'btn btn-primary',
+          textContent: st.botEnabled ? 'Matikan Bot' : 'Aktifkan Bot',
+          onClick: function () {
+            botToggleBtn.disabled = true;
+            apiFetch('/api/bot/toggle', { method: 'POST', body: { enabled: !st.botEnabled } })
+              .then(function (res) {
+                state.status.botEnabled = Boolean(res.botEnabled);
+                if (state.settings) state.settings.bot_enabled = Boolean(res.botEnabled);
+                updateHeaderBadge();
+                showToast(res.botEnabled ? 'Bot diaktifkan.' : 'Bot dinonaktifkan.');
+                renderSummaryTab(container);
+              })
+              .catch(function (err) {
+                botToggleBtn.disabled = false;
+                showToast(err.message || 'Gagal mengubah saklar bot.');
+              });
+          }
+        });
+
+        var botCard = el('section', { className: 'card-base' }, [
+          el('div', { className: 'card-header', style: 'margin-bottom: 0;' }, [
+            el('div', null, [
+              el('h2', { className: 'card-title', textContent: 'Status Balasan Otomatis' }),
+              el('p', {
+                className: 'card-desc',
+                textContent: st.botEnabled
+                  ? 'Bot sedang aktif membalas pesan WhatsApp yang masuk.'
+                  : 'Bot sedang dinonaktifkan sementara.'
+              })
+            ]),
+            botToggleBtn
+          ])
+        ]);
+
+        /* Kartu Koneksi WhatsApp */
+        var qrBox = el('div', { className: 'qr-box' });
+        if (typeof wa.qrDataUrl === 'string' && wa.qrDataUrl.indexOf('data:image/') === 0) {
+          qrBox.appendChild(
+            el('img', {
+              src: wa.qrDataUrl,
+              alt: 'Kode QR WhatsApp',
+              width: '240',
+              height: '240'
+            })
+          );
+        } else if (wa.state === 'open') {
+          qrBox.textContent = 'Perangkat sudah terhubung ke WhatsApp.';
+        } else {
+          qrBox.textContent = 'Menunggu kode QR atau gunakan kode pairing.';
+        }
+
+        var pairingInput = el('input', {
+          id: 'pairing-phone-input',
+          type: 'tel',
+          className: 'text-input mono',
+          placeholder: 'Contoh: 6281234567890'
+        });
+        var pairingMsg = el('div', { className: 'hidden' });
+        var pairingCodeHolder = el('div');
+
+        function renderPairingCodeBox(codeStr) {
+          clearEl(pairingCodeHolder);
+          if (!codeStr) return;
+          pairingCodeHolder.appendChild(
+            el('div', { className: 'pairing-code-display' }, [
+              el('span', { textContent: codeStr }),
+              el('button', {
+                type: 'button',
+                className: 'btn btn-secondary btn-sm',
+                textContent: 'Salin',
+                onClick: function () {
+                  if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(codeStr).then(function () {
+                      showToast('Kode pairing disalin.');
+                    });
+                  }
+                }
+              })
+            ])
+          );
+        }
+
+        if (wa.pairingCode) {
+          renderPairingCodeBox(wa.pairingCode);
+        }
+
+        var pairingForm = el('form', {
+          onSubmit: function (e) {
+            e.preventDefault();
+            var phone = pairingInput.value.trim();
+            if (!phone) {
+              pairingMsg.className = 'field-error';
+              pairingMsg.textContent = 'Masukkan nomor WhatsApp terlebih dahulu.';
+              return;
+            }
+            pairingMsg.className = 'field-hint';
+            pairingMsg.textContent = 'Meminta kode pairing...';
+            apiFetch('/api/wa/pairing', { method: 'POST', body: { phone: phone } })
+              .then(function (res) {
+                pairingMsg.className = 'field-success';
+                pairingMsg.textContent = 'Kode pairing 8 karakter berhasil dibuat.';
+                renderPairingCodeBox(res.code);
+              })
+              .catch(function (err) {
+                pairingMsg.className = 'field-error';
+                pairingMsg.textContent = err.message || 'Gagal meminta kode pairing.';
+              });
+          }
+        }, [
+          el('div', { className: 'field-group' }, [
+            el('label', { className: 'field-label', for: 'pairing-phone-input', textContent: 'Nomor WhatsApp untuk Pairing Code' }),
+            el('div', { className: 'btn-row' }, [
+              el('div', { style: 'flex: 1; min-width: 200px;' }, [pairingInput]),
+              el('button', {
+                type: 'submit',
+                className: 'btn btn-primary',
+                disabled: wa.state === 'open',
+                textContent: 'Minta Kode'
+              })
+            ]),
+            el('p', { className: 'field-hint', textContent: 'Gunakan nomor khusus bot dengan awalan 62 atau 08.' }),
+            pairingMsg,
+            pairingCodeHolder
+          ])
+        ]);
+
+        var logoutWaBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-danger btn-sm',
+          textContent: 'Keluar WA',
+          onClick: function () {
+            openConfirmModal({
+              title: 'Putuskan Sesi WhatsApp',
+              message: 'Sesi WhatsApp dan kredensial wa-auth akan dihapus, lalu kode QR baru akan disiapkan. Lanjutkan?',
+              confirmLabel: 'Keluar WA',
+              danger: true,
+              onConfirm: function () {
+                return apiFetch('/api/wa/logout', { method: 'POST' }).then(function () {
+                  showToast('Sesi WhatsApp diputuskan.');
+                  loadSummaryTab(container);
+                });
+              }
+            });
+          }
+        });
+
+        var waDetails = el('div', null, [
+          el('div', { className: 'field-group' }, [
+            el('span', { className: 'field-label', textContent: 'Nomor Terhubung' }),
+            el('span', { className: 'mono', textContent: wa.me || 'Belum tertaut' })
+          ]),
+          wa.lastError
+            ? el('div', { className: 'field-error', style: 'margin-bottom: 16px;', textContent: 'Info koneksi: ' + wa.lastError })
+            : null,
+          pairingForm
+        ]);
+
+        var waCard = el('section', { className: 'card-base' }, [
+          el('div', { className: 'card-header' }, [
+            el('div', { className: 'provider-title-group' }, [
+              el('h2', { className: 'card-title', textContent: 'Koneksi WhatsApp' }),
+              el('span', { className: 'badge ' + waBadge.cls, textContent: waBadge.text })
+            ]),
+            el('div', { className: 'btn-row' }, [
+              el('button', {
+                type: 'button',
+                className: 'btn btn-secondary btn-sm',
+                textContent: 'Muat ulang',
+                onClick: function () { loadSummaryTab(container); }
+              }),
+              logoutWaBtn
+            ])
+          ]),
+          el('div', { className: 'wa-grid' }, [qrBox, waDetails])
+        ]);
+
+        container.appendChild(metrics);
+        container.appendChild(botCard);
+        container.appendChild(waCard);
+      }
+
+      /* PEMUAT PENGATURAN UMUM */
+      function loadSettingsTab(container, renderFn) {
+        renderSkeleton(container);
+        apiFetch('/api/settings')
+          .then(function (data) {
+            state.settings = data.settings;
+            state.defaults = data.defaults;
+            if (data.limits) state.limits = data.limits;
+            state.hasRevealPassword = Boolean(data.has_reveal_password);
+            updateHeaderBadge();
+            renderFn(container);
+          })
+          .catch(function (err) {
+            clearEl(container);
+            container.appendChild(
+              el('div', { className: 'card-base' }, [
+                el('div', { className: 'field-error', textContent: err.message || 'Gagal memuat pengaturan.' }),
+                el('button', {
+                  type: 'button',
+                  className: 'btn btn-secondary',
+                  style: 'margin-top: 12px;',
+                  textContent: 'Muat ulang',
+                  onClick: function () { loadSettingsTab(container, renderFn); }
+                })
+              ])
+            );
+          });
+      }
+
+      function computeChangedSettings(draft, original) {
+        var patch = {};
+        var keys = Object.keys(draft);
+        for (var i = 0; i < keys.length; i++) {
+          var k = keys[i];
+          if (JSON.stringify(draft[k]) !== JSON.stringify(original[k])) {
+            patch[k] = draft[k];
+          }
+        }
+        return patch;
+      }
+
+      /* TAB 2: PROMPT */
+      function renderPromptTab(container) {
+        clearEl(container);
+        var s = state.settings;
+        var def = state.defaults || {};
+
+        var dirtyBadge = el('span', { className: 'badge badge-warn hidden', textContent: 'Belum disimpan' });
+        var errorBanner = el('div', { className: 'field-error hidden', role: 'alert' });
+        var sysCounter = el('span', { className: 'field-hint mono' });
+
+        var sysInput = el('textarea', {
+          id: 'prompt-system-input',
+          className: 'textarea-input mono',
+          rows: '12',
+          maxLength: '20000'
+        });
+        sysInput.value = s.system_prompt || '';
+
+        var contactInput = el('input', {
+          id: 'prompt-contact-input',
+          type: 'text',
+          className: 'text-input',
+          maxLength: '200',
+          value: s.contact || ''
+        });
+
+        var fallbackInput = el('textarea', {
+          id: 'prompt-fallback-input',
+          className: 'textarea-input',
+          rows: '2',
+          maxLength: '2000'
+        });
+        fallbackInput.value = s.fallback_text || '';
+
+        var refusalInput = el('textarea', {
+          id: 'prompt-refusal-input',
+          className: 'textarea-input',
+          rows: '2',
+          maxLength: '2000'
+        });
+        refusalInput.value = s.refusal_text || '';
+
+        var infoInput = el('textarea', {
+          id: 'prompt-info-input',
+          className: 'textarea-input',
+          rows: '3',
+          maxLength: '2000'
+        });
+        infoInput.value = s.info_text || '';
+
+        var helpInput = el('textarea', {
+          id: 'prompt-help-input',
+          className: 'textarea-input',
+          rows: '4',
+          maxLength: '2000'
+        });
+        helpInput.value = s.help_text || '';
+
+        function getDraft() {
+          return {
+            system_prompt: sysInput.value,
+            contact: contactInput.value,
+            fallback_text: fallbackInput.value,
+            refusal_text: refusalInput.value,
+            info_text: infoInput.value,
+            help_text: helpInput.value
+          };
+        }
+
+        function syncDirty() {
+          sysCounter.textContent = sysInput.value.length + ' / 20000 karakter';
+          var patch = computeChangedSettings(getDraft(), state.settings);
+          if (Object.keys(patch).length > 0) {
+            dirtyBadge.classList.remove('hidden');
+          } else {
+            dirtyBadge.classList.add('hidden');
+          }
+        }
+
+        [sysInput, contactInput, fallbackInput, refusalInput, infoInput, helpInput].forEach(function (inp) {
+          inp.addEventListener('input', syncDirty);
+        });
+        syncDirty();
+
+        var saveBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-primary',
+          textContent: 'Simpan',
+          onClick: function () {
+            var patch = computeChangedSettings(getDraft(), state.settings);
+            if (Object.keys(patch).length === 0) {
+              showToast('Tidak ada perubahan untuk disimpan.');
+              return;
+            }
+            errorBanner.classList.add('hidden');
+            saveBtn.disabled = true;
+            apiFetch('/api/settings', { method: 'PUT', body: patch })
+              .then(function (res) {
+                state.settings = res.settings;
+                syncDirty();
+                showToast('Pengaturan prompt disimpan.');
+              })
+              .catch(function (err) {
+                errorBanner.textContent = err.message || 'Gagal menyimpan pengaturan.';
+                errorBanner.classList.remove('hidden');
+              })
+              .finally(function () {
+                saveBtn.disabled = false;
+              });
+          }
+        });
+
+        var resetBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-secondary',
+          textContent: 'Reset',
+          onClick: function () {
+            openConfirmModal({
+              title: 'Reset Pengaturan Prompt',
+              message: 'Kembalikan system prompt, kontak, dan seluruh teks balasan ke nilai bawaan?',
+              confirmLabel: 'Reset',
+              danger: true,
+              onConfirm: function () {
+                sysInput.value = def.system_prompt || '';
+                contactInput.value = def.contact || '';
+                fallbackInput.value = def.fallback_text || '';
+                refusalInput.value = def.refusal_text || '';
+                infoInput.value = def.info_text || '';
+                helpInput.value = def.help_text || '';
+                syncDirty();
+              }
+            });
+          }
+        });
+
+        var card = el('section', { className: 'card-base' }, [
+          el('div', { className: 'card-header' }, [
+            el('div', null, [
+              el('h2', { className: 'card-title', textContent: 'Instruksi Sistem dan Teks Balasan' }),
+              el('p', {
+                className: 'card-desc',
+                textContent: 'Atur kepribadian asisten, kontak pengurus, dan pesan standar.'
+              })
+            ]),
+            dirtyBadge
+          ]),
+          el('div', { className: 'field-group' }, [
+            el('label', { className: 'field-label', for: 'prompt-system-input' }, [
+              el('span', { textContent: 'System Prompt' }),
+              sysCounter
+            ]),
+            sysInput,
+            el('p', {
+              className: 'field-hint mono',
+              textContent: 'Placeholder tersedia: {{NOW}} {{CONTACT}} {{KNOWLEDGE}}'
+            })
+          ]),
+          el('div', { className: 'field-group' }, [
+            el('label', { className: 'field-label', for: 'prompt-contact-input', textContent: 'Kontak Pengurus ({{CONTACT}})' }),
+            contactInput
+          ]),
+          el('div', { className: 'form-grid-2' }, [
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', for: 'prompt-fallback-input', textContent: 'Teks Saat LLM Sibuk / Gagal (fallback_text)' }),
+              fallbackInput
+            ]),
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', for: 'prompt-refusal-input', textContent: 'Teks Penolakan Injeksi (refusal_text)' }),
+              refusalInput
+            ])
+          ]),
+          el('div', { className: 'form-grid-2' }, [
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', for: 'prompt-info-input', textContent: 'Balasan Perintah !info (info_text)' }),
+              infoInput
+            ]),
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', for: 'prompt-help-input', textContent: 'Balasan Perintah !help (help_text)' }),
+              helpInput
+            ])
+          ]),
+          errorBanner,
+          el('div', { className: 'form-footer' }, [
+            resetBtn,
+            saveBtn
+          ])
+        ]);
+
+        container.appendChild(card);
+      }
+
+      /* TAB 3: KNOWLEDGE */
+      function renderKnowledgeTab(container) {
+        clearEl(container);
+        var s = state.settings;
+        var warnLimit = (state.limits && state.limits.knowledge_warn_chars) || 12000;
+        var dirtyBadge = el('span', { className: 'badge badge-warn hidden', textContent: 'Belum disimpan' });
+        var counterEl = el('span', { className: 'field-hint mono' });
+        var warnBanner = el('div', {
+          className: 'field-warn hidden',
+          textContent: 'Ukuran knowledge melewati ' + warnLimit + ' karakter. Ukuran yang terlalu besar dapat meningkatkan konsumsi token dan latensi.'
+        });
+        var errorBanner = el('div', { className: 'field-error hidden', role: 'alert' });
+
+        var knowInput = el('textarea', {
+          id: 'knowledge-editor-input',
+          className: 'textarea-input mono',
+          rows: '18',
+          maxLength: '50000'
+        });
+        knowInput.value = s.knowledge || '';
+
+        function syncKnowledgeState() {
+          var len = knowInput.value.length;
+          counterEl.textContent = len + ' / 50000 karakter';
+          if (len > warnLimit) {
+            warnBanner.classList.remove('hidden');
+          } else {
+            warnBanner.classList.add('hidden');
+          }
+          if (knowInput.value !== (state.settings.knowledge || '')) {
+            dirtyBadge.classList.remove('hidden');
+          } else {
+            dirtyBadge.classList.add('hidden');
+          }
+        }
+
+        knowInput.addEventListener('input', syncKnowledgeState);
+        syncKnowledgeState();
+
+        var saveBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-primary',
+          textContent: 'Simpan',
+          onClick: function () {
+            if (knowInput.value === state.settings.knowledge) {
+              showToast('Tidak ada perubahan untuk disimpan.');
+              return;
+            }
+            errorBanner.classList.add('hidden');
+            saveBtn.disabled = true;
+            apiFetch('/api/settings', { method: 'PUT', body: { knowledge: knowInput.value } })
+              .then(function (res) {
+                state.settings = res.settings;
+                syncKnowledgeState();
+                showToast('Knowledge base berhasil disimpan.');
+              })
+              .catch(function (err) {
+                errorBanner.textContent = err.message || 'Gagal menyimpan knowledge base.';
+                errorBanner.classList.remove('hidden');
+              })
+              .finally(function () {
+                saveBtn.disabled = false;
+              });
+          }
+        });
+
+        var card = el('section', { className: 'card-base' }, [
+          el('div', { className: 'card-header' }, [
+            el('div', null, [
+              el('h2', { className: 'card-title', textContent: 'Knowledge Base LSO Kaliber' }),
+              el('p', {
+                className: 'card-desc',
+                textContent: 'Isi materi resmi organisasi yang menjadi satu-satunya sumber jawaban bot.'
+              })
+            ]),
+            dirtyBadge
+          ]),
+          el('div', { className: 'field-group' }, [
+            el('label', { className: 'field-label', for: 'knowledge-editor-input' }, [
+              el('span', { textContent: 'Dokumen Knowledge ({{KNOWLEDGE}})' }),
+              counterEl
+            ]),
+            knowInput,
+            warnBanner,
+            errorBanner
+          ]),
+          el('div', { className: 'form-footer', style: 'justify-content: flex-end;' }, [saveBtn])
+        ]);
+
+        container.appendChild(card);
+      }
+
+      /* TAB 4: PROVIDER */
+      function loadProviderTab(container) {
+        renderSkeleton(container);
+        Promise.all([
+          apiFetch('/api/providers'),
+          apiFetch('/api/settings')
+        ])
+          .then(function (results) {
+            state.providersData = results[0];
+            state.settings = results[1].settings;
+            state.defaults = results[1].defaults;
+            state.hasRevealPassword = Boolean(results[1].has_reveal_password);
+            if (state.activeTab === 'provider') {
+              renderProviderTab(container);
+            }
+          })
+          .catch(function (err) {
+            clearEl(container);
+            container.appendChild(
+              el('div', { className: 'card-base' }, [
+                el('div', { className: 'field-error', textContent: err.message || 'Gagal memuat daftar provider.' }),
+                el('button', {
+                  type: 'button',
+                  className: 'btn btn-secondary',
+                  style: 'margin-top: 12px;',
+                  textContent: 'Muat ulang',
+                  onClick: function () { loadProviderTab(container); }
+                })
+              ])
+            );
+          });
+      }
+
+      function mapKeyStatusBadge(status) {
+        if (status === 'valid') return { text: 'Valid', cls: 'badge-success' };
+        if (status === 'invalid') return { text: 'Ditolak', cls: 'badge-error' };
+        if (status === 'rate_limited') return { text: 'Kena limit', cls: 'badge-warn' };
+        if (status === 'unreachable') return { text: 'Tidak terjangkau', cls: 'badge-warn' };
+        if (status === 'error') return { text: 'Error', cls: 'badge-error' };
+        return { text: 'Belum dites', cls: 'badge-neutral' };
+      }
+
+      function getStrategyDescription(strategy) {
+        if (strategy === 'round_robin') {
+          return 'Membagi panggilan secara bergiliran di antara semua provider sehat yang memiliki model default.';
+        }
+        if (strategy === 'priority') {
+          return 'Selalu mengutamakan provider sehat dengan angka prioritas terkecil, lalu beralih ke urutan berikutnya jika gagal.';
+        }
+        return 'Menggunakan model utama dan daftar model cadangan yang diatur manual pada tab Model.';
+      }
+
+      function renderProviderTab(container) {
+        clearEl(container);
+        var pData = state.providersData || { providers: [], maxProviders: 5, maxKeysPerProvider: 20, serverNow: Date.now() };
+        var providers = pData.providers || [];
+        var maxProv = pData.maxProviders || 5;
+        var maxKeys = pData.maxKeysPerProvider || 20;
+        var serverNow = pData.serverNow || Date.now();
+        var currentStrategy = (state.settings && state.settings.llm_strategy) || 'manual';
+
+        /* Pemilih Mode Penggunaan */
+        var strategyDesc = el('p', {
+          className: 'field-hint',
+          textContent: getStrategyDescription(currentStrategy)
+        });
+
+        var strategySelect = el('select', {
+          id: 'provider-strategy-select',
+          className: 'select-input',
+          onChange: function () {
+            var val = strategySelect.value;
+            strategyDesc.textContent = getStrategyDescription(val);
+            apiFetch('/api/settings', { method: 'PUT', body: { llm_strategy: val } })
+              .then(function (res) {
+                state.settings = res.settings;
+                showToast('Mode penggunaan LLM diperbarui.');
+              })
+              .catch(function (err) {
+                showToast(err.message || 'Gagal mengubah mode penggunaan.');
+              });
+          }
+        }, [
+          el('option', { value: 'manual', selected: currentStrategy === 'manual', textContent: 'manual - Pilih model utama dan fallback dari tab Model' }),
+          el('option', { value: 'round_robin', selected: currentStrategy === 'round_robin', textContent: 'round_robin - Bergiliran antar provider aktif' }),
+          el('option', { value: 'priority', selected: currentStrategy === 'priority', textContent: 'priority - Urutkan berdasarkan angka prioritas provider' })
+        ]);
+
+        /* Tombol Tes Semua Key */
+        var testAllStatus = el('span', { className: 'field-hint' });
+        var testAllBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-secondary btn-sm',
+          textContent: 'Tes semua key',
+          onClick: function () {
+            var queue = [];
+            for (var i = 0; i < providers.length; i++) {
+              var p = providers[i];
+              var pKeys = p.keys || [];
+              for (var j = 0; j < pKeys.length; j++) {
+                queue.push({ providerId: p.id, keyId: pKeys[j].id, label: p.name + '/' + pKeys[j].label });
+              }
+            }
+            if (queue.length === 0) {
+              showToast('Belum ada API key yang tersimpan untuk dites.');
+              return;
+            }
+            testAllBtn.disabled = true;
+            var idx = 0;
+            function next() {
+              if (idx >= queue.length) {
+                testAllBtn.disabled = false;
+                testAllStatus.textContent = 'Selesai menguji ' + queue.length + ' key.';
+                loadProviderTab(container);
+                return;
+              }
+              var item = queue[idx++];
+              testAllStatus.textContent = 'Menguji ' + idx + '/' + queue.length + ' (' + item.label + ')...';
+              apiFetch('/api/providers/' + item.providerId + '/keys/' + item.keyId + '/test', { method: 'POST' })
+                .catch(function () {})
+                .then(function () {
+                  return apiFetch('/api/providers').then(function (fresh) {
+                    state.providersData = fresh;
+                  }).catch(function () {});
+                })
+                .then(function () {
+                  next();
+                });
+            }
+            next();
+          }
+        });
+
+        var addProviderBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-primary btn-sm',
+          disabled: providers.length >= maxProv,
+          textContent: 'Tambah provider',
+          onClick: function () {
+            openAddProviderModal(container);
+          }
+        });
+
+        var listWrap = el('div', { className: 'provider-list' });
+        if (providers.length === 0) {
+          listWrap.appendChild(
+            el('div', {
+              className: 'empty-state',
+              style: 'margin-top: 16px;',
+              textContent: 'Belum ada provider LLM. Klik tombol "Tambah provider" di atas untuk menambahkan endpoint OpenAI-compatible.'
+            })
+          );
+        } else {
+          for (var i = 0; i < providers.length; i++) {
+            listWrap.appendChild(buildProviderBlock(providers[i], maxKeys, serverNow, container));
+          }
+        }
+
+        var card = el('section', { className: 'card-base' }, [
+          el('div', { className: 'card-header' }, [
+            el('div', null, [
+              el('h2', {
+                className: 'card-title',
+                textContent: 'Provider dan API key (' + providers.length + '/' + maxProv + ')'
+              }),
+              el('p', {
+                className: 'card-desc',
+                textContent: 'Maksimal ' + maxProv + ' provider dan ' + maxKeys + ' API key per provider.'
+              })
+            ]),
+            el('div', { className: 'btn-row' }, [
+              testAllStatus,
+              testAllBtn,
+              addProviderBtn
+            ])
+          ]),
+          el('div', { className: 'field-group' }, [
+            el('label', { className: 'field-label', for: 'provider-strategy-select', textContent: 'Mode penggunaan' }),
+            strategySelect,
+            strategyDesc
+          ]),
+          listWrap
+        ]);
+
+        container.appendChild(card);
+      }
+
+      function buildProviderBlock(p, maxKeys, serverNow, container) {
+        var hasKeys = Array.isArray(p.keys) && p.keys.length > 0;
+        var inlineFeedback = el('div', { className: 'hidden' });
+
+        var nameInput = el('input', {
+          type: 'text',
+          className: 'text-input mono',
+          value: p.name
+        });
+        var urlInput = el('input', {
+          type: 'url',
+          className: 'text-input mono',
+          value: p.baseUrl,
+          readOnly: hasKeys
+        });
+        var modelInput = el('input', {
+          type: 'text',
+          className: 'text-input mono',
+          list: 'global-models-datalist',
+          value: p.model || '',
+          placeholder: 'Contoh: gpt-4o-mini'
+        });
+        var prioInput = el('input', {
+          type: 'number',
+          className: 'text-input mono',
+          min: '-1000',
+          max: '1000',
+          value: String(p.priority)
+        });
+
+        var toggleInput = el('input', {
+          type: 'checkbox',
+          className: 'switch-input',
+          checked: p.enabled,
+          'aria-label': 'Aktifkan provider ' + p.name,
+          onChange: function () {
+            apiFetch('/api/providers/' + p.id + '/toggle', {
+              method: 'POST',
+              body: { enabled: toggleInput.checked }
+            })
+              .then(function () {
+                showToast('Status provider ' + p.name + ' diperbarui.');
+                loadProviderTab(container);
+              })
+              .catch(function (err) {
+                toggleInput.checked = !toggleInput.checked;
+                showToast(err.message || 'Gagal mengubah status provider.');
+              });
+          }
+        });
+
+        var saveProvBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-secondary btn-sm',
+          textContent: 'Simpan',
+          onClick: function () {
+            inlineFeedback.className = 'hidden';
+            var payload = {
+              name: nameInput.value.trim(),
+              model: modelInput.value.trim(),
+              priority: Number.parseInt(prioInput.value, 10) || 0
+            };
+            if (!hasKeys) {
+              payload.baseUrl = urlInput.value.trim();
+            }
+            apiFetch('/api/providers/' + p.id, { method: 'PUT', body: payload })
+              .then(function () {
+                showToast('Provider ' + payload.name + ' disimpan.');
+                loadProviderTab(container);
+              })
+              .catch(function (err) {
+                inlineFeedback.className = 'field-error';
+                inlineFeedback.textContent = err.message || 'Gagal memperbarui provider.';
+              });
+          }
+        });
+
+        var testProvBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-secondary btn-sm',
+          textContent: 'Tes koneksi',
+          onClick: function () {
+            testProvBtn.disabled = true;
+            inlineFeedback.className = 'field-hint';
+            inlineFeedback.textContent = 'Menguji koneksi provider...';
+            apiFetch('/api/providers/' + p.id + '/test', { method: 'POST' })
+              .then(function (res) {
+                inlineFeedback.className = res.ok ? 'field-success' : 'field-error';
+                inlineFeedback.textContent = res.message + ' (' + res.latencyMs + ' ms)';
+                return apiFetch('/api/providers').then(function (fresh) {
+                  state.providersData = fresh;
+                });
+              })
+              .catch(function (err) {
+                inlineFeedback.className = 'field-error';
+                inlineFeedback.textContent = err.message || 'Gagal menguji provider.';
+              })
+              .finally(function () {
+                testProvBtn.disabled = false;
+              });
+          }
+        });
+
+        var viewModelsBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-secondary btn-sm',
+          textContent: 'Lihat model',
+          onClick: function () {
+            viewModelsBtn.disabled = true;
+            inlineFeedback.className = 'field-hint';
+            inlineFeedback.textContent = 'Memuat daftar model dari ' + p.name + '...';
+            apiFetch('/api/providers/' + p.id + '/models')
+              .then(function (res) {
+                var list = Array.isArray(res.models) ? res.models : [];
+                if (res.error) {
+                  inlineFeedback.className = 'field-warn';
+                  inlineFeedback.textContent = 'Peringatan model (' + res.error + '): ' + (list.length ? list.join(', ') : 'kosong');
+                } else {
+                  inlineFeedback.className = 'field-success';
+                  inlineFeedback.textContent = 'Model tersedia (' + list.length + '): ' + (list.slice(0, 25).join(', ') || 'kosong');
+                }
+                state.modelsList = [{ provider: p.name, models: list }];
+                populateGlobalModelsDatalist();
+              })
+              .catch(function (err) {
+                inlineFeedback.className = 'field-error';
+                inlineFeedback.textContent = err.message || 'Gagal mengambil daftar model.';
+              })
+              .finally(function () {
+                viewModelsBtn.disabled = false;
+              });
+          }
+        });
+
+        var deleteProvBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-danger btn-sm',
+          textContent: 'Hapus',
+          onClick: function () {
+            openConfirmModal({
+              title: 'Hapus Provider ' + p.name,
+              message: 'Provider "' + p.name + '" beserta seluruh API key di dalamnya akan dihapus permanen. Lanjutkan?',
+              confirmLabel: 'Hapus',
+              danger: true,
+              onConfirm: function () {
+                return apiFetch('/api/providers/' + p.id, { method: 'DELETE' }).then(function () {
+                  showToast('Provider dihapus.');
+                  loadProviderTab(container);
+                });
+              }
+            });
+          }
+        });
+
+        var addKeyBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-secondary btn-sm',
+          disabled: p.keys.length >= maxKeys,
+          textContent: 'Tambah key (' + p.keys.length + '/' + maxKeys + ')',
+          onClick: function () {
+            openAddKeyModal(p, container);
+          }
+        });
+
+        var keysWrap = el('div', { className: 'key-list' });
+        if (p.keys.length === 0) {
+          keysWrap.appendChild(
+            el('p', {
+              className: 'field-hint',
+              style: 'padding: 8px 0;',
+              textContent: 'Belum ada API key (mode lokal tanpa autentikasi atau tambahkan key baru).'
+            })
+          );
+        } else {
+          for (var kIdx = 0; kIdx < p.keys.length; kIdx++) {
+            keysWrap.appendChild(buildKeyRow(p, p.keys[kIdx], serverNow, container));
+          }
+        }
+
+        return el('div', { className: 'provider-block' }, [
+          el('div', { className: 'provider-top' }, [
+            el('div', { className: 'provider-title-group' }, [
+              toggleInput,
+              el('strong', { className: 'mono', textContent: p.name }),
+              el('span', {
+                className: 'badge ' + (p.enabled ? 'badge-success' : 'badge-neutral'),
+                textContent: p.enabled ? 'Aktif' : 'Nonaktif'
+              })
+            ]),
+            el('div', { className: 'btn-row' }, [
+              saveProvBtn,
+              testProvBtn,
+              viewModelsBtn,
+              addKeyBtn,
+              deleteProvBtn
+            ])
+          ]),
+          el('div', { className: 'form-grid-3' }, [
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', textContent: 'Nama Provider' }),
+              nameInput
+            ]),
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', textContent: 'Base URL' }),
+              urlInput,
+              hasKeys
+                ? el('p', { className: 'field-hint', textContent: 'Hapus semua key dulu untuk mengubah Base URL.' })
+                : null
+            ]),
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', textContent: 'Model Default & Prioritas' }),
+              el('div', { className: 'btn-row', style: 'flex-wrap: nowrap;' }, [
+                el('div', { style: 'flex: 1;' }, [modelInput]),
+                el('div', { style: 'width: 96px;' }, [prioInput])
+              ])
+            ])
+          ]),
+          inlineFeedback,
+          keysWrap
+        ]);
+      }
+
+      function buildKeyRow(provider, k, serverNow, container) {
+        var stBadge = mapKeyStatusBadge(k.lastStatus);
+        var cooldownRemainingSec = k.cooldownUntil > serverNow
+          ? Math.ceil((k.cooldownUntil - serverNow) / 1000)
+          : 0;
+
+        var keyToggle = el('input', {
+          type: 'checkbox',
+          className: 'switch-input',
+          checked: k.enabled,
+          'aria-label': 'Aktifkan key ' + k.label,
+          onChange: function () {
+            apiFetch('/api/providers/' + provider.id + '/keys/' + k.id + '/toggle', {
+              method: 'POST',
+              body: { enabled: keyToggle.checked }
+            })
+              .then(function () {
+                loadProviderTab(container);
+              })
+              .catch(function (err) {
+                keyToggle.checked = !keyToggle.checked;
+                showToast(err.message || 'Gagal mengubah status key.');
+              });
+          }
+        });
+
+        var testKeyBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-secondary btn-sm',
+          textContent: 'Tes',
+          onClick: function () {
+            testKeyBtn.disabled = true;
+            apiFetch('/api/providers/' + provider.id + '/keys/' + k.id + '/test', { method: 'POST' })
+              .then(function (res) {
+                showToast(k.label + ': ' + res.message);
+                loadProviderTab(container);
+              })
+              .catch(function (err) {
+                testKeyBtn.disabled = false;
+                showToast(err.message || 'Gagal menguji key.');
+              });
+          }
+        });
+
+        var revealBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-secondary btn-sm',
+          textContent: 'Lihat key',
+          onClick: function () {
+            openRevealKeyModal(k);
+          }
+        });
+
+        var deleteKeyBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-danger btn-sm',
+          textContent: 'Hapus',
+          onClick: function () {
+            openConfirmModal({
+              title: 'Hapus API Key',
+              message: 'Hapus API key "' + k.label + '" (....' + k.keyLast4 + ')?',
+              confirmLabel: 'Hapus',
+              danger: true,
+              onConfirm: function () {
+                return apiFetch('/api/providers/' + provider.id + '/keys/' + k.id, { method: 'DELETE' }).then(function () {
+                  showToast('API key dihapus.');
+                  loadProviderTab(container);
+                });
+              }
+            });
+          }
+        });
+
+        return el('div', { className: 'key-row' }, [
+          el('div', { className: 'key-info' }, [
+            keyToggle,
+            el('span', { className: 'mono', style: 'font-weight: 600;', textContent: k.label }),
+            el('span', { className: 'mono field-hint', textContent: '....' + k.keyLast4 }),
+            el('span', { className: 'badge ' + stBadge.cls, textContent: stBadge.text }),
+            cooldownRemainingSec > 0
+              ? el('span', { className: 'badge badge-warn', textContent: 'Cooldown ' + cooldownRemainingSec + 's' })
+              : null,
+            el('span', { className: 'field-hint', textContent: 'Gagal: ' + (k.failCount || 0) })
+          ]),
+          el('div', { className: 'btn-row' }, [
+            testKeyBtn,
+            revealBtn,
+            deleteKeyBtn
+          ])
+        ]);
+      }
+
+      function openAddProviderModal(container) {
+        var nameInp = el('input', { type: 'text', className: 'text-input mono', placeholder: 'contoh: groq' });
+        var urlInp = el('input', { type: 'url', className: 'text-input mono', placeholder: 'https://api.groq.com/openai/v1' });
+        var modelInp = el('input', { type: 'text', className: 'text-input mono', placeholder: 'llama-3.3-70b-versatile' });
+        var prioInp = el('input', { type: 'number', className: 'text-input mono', value: '0', min: '-1000', max: '1000' });
+        var keyInp = el('input', { type: 'password', className: 'text-input mono', placeholder: 'Opsional untuk tombol Tes dulu' });
+        var feedback = el('div', { className: 'hidden' });
+
+        var testFirstBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-secondary',
+          textContent: 'Tes dulu',
+          onClick: function () {
+            testFirstBtn.disabled = true;
+            feedback.className = 'field-hint';
+            feedback.textContent = 'Menguji koneksi ke endpoint...';
+            apiFetch('/api/llm/test', {
+              method: 'POST',
+              body: {
+                baseUrl: urlInp.value.trim(),
+                apiKey: keyInp.value.trim(),
+                model: modelInp.value.trim()
+              }
+            })
+              .then(function (res) {
+                feedback.className = res.ok ? 'field-success' : 'field-error';
+                feedback.textContent = res.message + ' (' + res.latencyMs + ' ms)';
+              })
+              .catch(function (err) {
+                feedback.className = 'field-error';
+                feedback.textContent = err.message || 'Gagal menguji koneksi.';
+              })
+              .finally(function () {
+                testFirstBtn.disabled = false;
+              });
+          }
+        });
+
+        var saveBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-primary',
+          textContent: 'Simpan',
+          onClick: function () {
+            saveBtn.disabled = true;
+            feedback.className = 'hidden';
+            apiFetch('/api/providers', {
+              method: 'POST',
+              body: {
+                name: nameInp.value.trim(),
+                baseUrl: urlInp.value.trim(),
+                model: modelInp.value.trim(),
+                priority: Number.parseInt(prioInp.value, 10) || 0
+              }
+            })
+              .then(function () {
+                closeModal();
+                showToast('Provider berhasil ditambahkan.');
+                loadProviderTab(container);
+              })
+              .catch(function (err) {
+                saveBtn.disabled = false;
+                feedback.className = 'field-error';
+                feedback.textContent = err.message || 'Gagal menyimpan provider.';
+              });
+          }
+        });
+
+        var modalNode = el('div', null, [
+          el('h2', { className: 'card-title', style: 'margin-bottom: 16px;', textContent: 'Tambah Provider Baru' }),
+          el('div', { className: 'field-group' }, [
+            el('label', { className: 'field-label', textContent: 'Nama Provider (huruf kecil/angka)' }),
+            nameInp
+          ]),
+          el('div', { className: 'field-group' }, [
+            el('label', { className: 'field-label', textContent: 'Base URL' }),
+            urlInp
+          ]),
+          el('div', { className: 'form-grid-2' }, [
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', textContent: 'Model Default' }),
+              modelInp
+            ]),
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', textContent: 'Prioritas (-1000 s/d 1000)' }),
+              prioInp
+            ])
+          ]),
+          el('div', { className: 'field-group' }, [
+            el('label', { className: 'field-label', textContent: 'API Key Uji Coba (opsional untuk Tes dulu)' }),
+            keyInp
+          ]),
+          feedback,
+          el('div', { className: 'btn-row', style: 'justify-content: flex-end; margin-top: 16px;' }, [
+            el('button', { type: 'button', className: 'btn btn-secondary', textContent: 'Batal', onClick: closeModal }),
+            testFirstBtn,
+            saveBtn
+          ])
+        ]);
+
+        openModal(modalNode);
+      }
+
+      function openAddKeyModal(provider, container) {
+        var labelInp = el('input', { type: 'text', className: 'text-input', placeholder: 'contoh: key-utama' });
+        var keyInp = el('input', { type: 'password', className: 'text-input mono', placeholder: 'sk-...' });
+        var feedback = el('div', { className: 'hidden' });
+
+        var testFirstBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-secondary',
+          textContent: 'Tes dulu',
+          onClick: function () {
+            testFirstBtn.disabled = true;
+            feedback.className = 'field-hint';
+            feedback.textContent = 'Menguji API key...';
+            apiFetch('/api/llm/test', {
+              method: 'POST',
+              body: {
+                providerId: provider.id,
+                baseUrl: provider.baseUrl,
+                model: provider.model,
+                apiKey: keyInp.value.trim()
+              }
+            })
+              .then(function (res) {
+                feedback.className = res.ok ? 'field-success' : 'field-error';
+                feedback.textContent = res.message + ' (' + res.latencyMs + ' ms)';
+              })
+              .catch(function (err) {
+                feedback.className = 'field-error';
+                feedback.textContent = err.message || 'Gagal menguji API key.';
+              })
+              .finally(function () {
+                testFirstBtn.disabled = false;
+              });
+          }
+        });
+
+        var saveBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-primary',
+          textContent: 'Simpan',
+          onClick: function () {
+            saveBtn.disabled = true;
+            feedback.className = 'hidden';
+            apiFetch('/api/providers/' + provider.id + '/keys', {
+              method: 'POST',
+              body: {
+                label: labelInp.value.trim(),
+                apiKey: keyInp.value.trim()
+              }
+            })
+              .then(function () {
+                closeModal();
+                showToast('API key ditambahkan.');
+                loadProviderTab(container);
+              })
+              .catch(function (err) {
+                saveBtn.disabled = false;
+                feedback.className = 'field-error';
+                feedback.textContent = err.message || 'Gagal menyimpan API key.';
+              });
+          }
+        });
+
+        var modalNode = el('div', null, [
+          el('h2', { className: 'card-title', style: 'margin-bottom: 16px;', textContent: 'Tambah API Key ke ' + provider.name }),
+          el('div', { className: 'field-group' }, [
+            el('label', { className: 'field-label', textContent: 'Label Key' }),
+            labelInp
+          ]),
+          el('div', { className: 'field-group' }, [
+            el('label', { className: 'field-label', textContent: 'API Key' }),
+            keyInp
+          ]),
+          feedback,
+          el('div', { className: 'btn-row', style: 'justify-content: flex-end; margin-top: 16px;' }, [
+            el('button', { type: 'button', className: 'btn btn-secondary', textContent: 'Batal', onClick: closeModal }),
+            testFirstBtn,
+            saveBtn
+          ])
+        ]);
+
+        openModal(modalNode);
+      }
+
+      function openRevealKeyModal(k) {
+        var passInp = el('input', { type: 'password', className: 'text-input mono', autocomplete: 'off' });
+        var feedback = el('div', { className: 'hidden' });
+        var plainHolder = el('div');
+
+        var submitBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-primary',
+          textContent: 'Buka Key',
+          onClick: function () {
+            submitBtn.disabled = true;
+            feedback.className = 'hidden';
+            clearEl(plainHolder);
+            apiFetch('/api/keys/' + k.id + '/reveal', {
+              method: 'POST',
+              body: { password: passInp.value }
+            })
+              .then(function (res) {
+                passInp.value = '';
+                var codeBox = el('div', {
+                  className: 'field-success mono',
+                  style: 'word-break: break-all; margin-top: 12px;',
+                  textContent: res.plainKey
+                });
+                plainHolder.appendChild(codeBox);
+                if (state.revealClearTimer) clearTimeout(state.revealClearTimer);
+                state.revealClearTimer = setTimeout(function () {
+                  clearEl(plainHolder);
+                  closeModal();
+                }, 30000);
+              })
+              .catch(function (err) {
+                feedback.className = 'field-error';
+                feedback.textContent = err.message || 'Gagal membuka API key.';
+              })
+              .finally(function () {
+                submitBtn.disabled = false;
+              });
+          }
+        });
+
+        var modalNode = el('div', null, [
+          el('h2', { className: 'card-title', style: 'margin-bottom: 8px;', textContent: 'Lihat API Key: ' + k.label }),
+          el('p', {
+            className: 'card-desc',
+            style: 'margin-bottom: 16px;',
+            textContent: 'Masukkan REVEAL_PASSWORD server. Key otomatis dihapus dari layar setelah 30 detik atau saat jendela ditutup.'
+          }),
+          el('div', { className: 'field-group' }, [
+            el('label', { className: 'field-label', textContent: 'Password Reveal' }),
+            passInp
+          ]),
+          feedback,
+          plainHolder,
+          el('div', { className: 'btn-row', style: 'justify-content: flex-end; margin-top: 16px;' }, [
+            el('button', { type: 'button', className: 'btn btn-secondary', textContent: 'Tutup', onClick: closeModal }),
+            submitBtn
+          ])
+        ]);
+
+        openModal(modalNode);
+      }
+
+      /* TAB 5: MODEL */
+      function renderModelTab(container) {
+        clearEl(container);
+        var s = state.settings;
+        var isManual = s.llm_strategy === 'manual';
+        var dirtyBadge = el('span', { className: 'badge badge-warn hidden', textContent: 'Belum disimpan' });
+        var errorBanner = el('div', { className: 'field-error hidden', role: 'alert' });
+        var pingResultBox = el('div', { className: 'hidden' });
+
+        var modelInp = el('input', {
+          id: 'model-primary-input',
+          type: 'text',
+          className: 'text-input mono',
+          list: 'global-models-datalist',
+          disabled: !isManual,
+          value: s.model || '',
+          placeholder: 'Contoh: default/gpt-4o-mini'
+        });
+
+        var fallbackInp = el('textarea', {
+          id: 'model-fallback-input',
+          className: 'textarea-input mono',
+          rows: '4',
+          disabled: !isManual,
+          placeholder: 'Satu model per baris (format namaProvider/namaModel)'
+        });
+        fallbackInp.value = Array.isArray(s.fallback_models) ? s.fallback_models.join('\n') : '';
+
+        var tempInp = el('input', {
+          id: 'model-temp-input',
+          type: 'number',
+          step: '0.1',
+          min: '0',
+          max: '2',
+          className: 'text-input mono',
+          value: String(s.temperature)
+        });
+
+        var tokensInp = el('input', {
+          id: 'model-tokens-input',
+          type: 'number',
+          min: '1',
+          max: '2000',
+          className: 'text-input mono',
+          value: String(s.max_tokens)
+        });
+
+        var turnsInp = el('input', {
+          id: 'model-turns-input',
+          type: 'number',
+          min: '0',
+          max: '20',
+          className: 'text-input mono',
+          value: String(s.history_turns)
+        });
+
+        function getDraft() {
+          return {
+            model: modelInp.value.trim(),
+            fallback_models: fallbackInp.value
+              .split(/\r?\n/)
+              .map(function (x) { return x.trim(); })
+              .filter(Boolean),
+            temperature: Number.parseFloat(tempInp.value),
+            max_tokens: Number.parseInt(tokensInp.value, 10),
+            history_turns: Number.parseInt(turnsInp.value, 10)
+          };
+        }
+
+        function syncDirty() {
+          var patch = computeChangedSettings(getDraft(), state.settings);
+          if (Object.keys(patch).length > 0) {
+            dirtyBadge.classList.remove('hidden');
+          } else {
+            dirtyBadge.classList.add('hidden');
+          }
+        }
+
+        [modelInp, fallbackInp, tempInp, tokensInp, turnsInp].forEach(function (inp) {
+          inp.addEventListener('input', syncDirty);
+        });
+
+        var fetchModelsBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-secondary btn-sm',
+          textContent: 'Muat daftar model',
+          onClick: function () {
+            fetchModelsBtn.disabled = true;
+            apiFetch('/api/models')
+              .then(function (list) {
+                state.modelsList = Array.isArray(list) ? list : [];
+                populateGlobalModelsDatalist();
+                var total = 0;
+                for (var i = 0; i < state.modelsList.length; i++) {
+                  total += (state.modelsList[i].models || []).length;
+                }
+                showToast('Berhasil memuat ' + total + ' model ke daftar pilihan.');
+              })
+              .catch(function (err) {
+                showToast(err.message || 'Gagal memuat daftar model.');
+              })
+              .finally(function () {
+                fetchModelsBtn.disabled = false;
+              });
+          }
+        });
+
+        var pingBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-secondary btn-sm',
+          textContent: 'Tes koneksi LLM',
+          onClick: function () {
+            pingBtn.disabled = true;
+            pingResultBox.className = 'field-hint';
+            pingResultBox.textContent = 'Menguji rencana model aktif...';
+            apiFetch('/api/llm/ping', { method: 'POST' })
+              .then(function (res) {
+                pingResultBox.className = res.ok ? 'field-success' : 'field-error';
+                pingResultBox.textContent = (res.model ? '[' + res.model + '] ' : '') + res.message + ' (' + res.latencyMs + ' ms)';
+              })
+              .catch(function (err) {
+                pingResultBox.className = 'field-error';
+                pingResultBox.textContent = err.message || 'Gagal menguji koneksi LLM.';
+              })
+              .finally(function () {
+                pingBtn.disabled = false;
+              });
+          }
+        });
+
+        var saveBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-primary',
+          textContent: 'Simpan',
+          onClick: function () {
+            var patch = computeChangedSettings(getDraft(), state.settings);
+            if (Object.keys(patch).length === 0) {
+              showToast('Tidak ada perubahan untuk disimpan.');
+              return;
+            }
+            errorBanner.classList.add('hidden');
+            saveBtn.disabled = true;
+            apiFetch('/api/settings', { method: 'PUT', body: patch })
+              .then(function (res) {
+                state.settings = res.settings;
+                syncDirty();
+                showToast('Pengaturan model berhasil disimpan.');
+              })
+              .catch(function (err) {
+                errorBanner.textContent = err.message || 'Gagal menyimpan pengaturan model.';
+                errorBanner.classList.remove('hidden');
+              })
+              .finally(function () {
+                saveBtn.disabled = false;
+              });
+          }
+        });
+
+        var card = el('section', { className: 'card-base' }, [
+          el('div', { className: 'card-header' }, [
+            el('div', null, [
+              el('h2', { className: 'card-title', textContent: 'Konfigurasi Model dan Parameter LLM' }),
+              el('p', {
+                className: 'card-desc',
+                textContent: 'Atur pemilihan model, suhu generasi, batas token, dan giliran memori.'
+              })
+            ]),
+            el('div', { className: 'btn-row' }, [
+              dirtyBadge,
+              fetchModelsBtn,
+              pingBtn
+            ])
+          ]),
+          !isManual
+            ? el('div', {
+                className: 'field-warn',
+                style: 'margin-bottom: 16px;',
+                textContent: 'Mode penggunaan saat ini adalah "' + s.llm_strategy + '". Pemilihan model utama dan cadangan dikelola otomatis dari daftar di tab Provider.'
+              })
+            : null,
+          pingResultBox,
+          el('div', { className: 'field-group', style: 'margin-top: 12px;' }, [
+            el('label', { className: 'field-label', for: 'model-primary-input', textContent: 'Model Utama (model)' }),
+            modelInp
+          ]),
+          el('div', { className: 'field-group' }, [
+            el('label', { className: 'field-label', for: 'model-fallback-input', textContent: 'Model Cadangan / Fallback (satu per baris)' }),
+            fallbackInp
+          ]),
+          el('div', { className: 'form-grid-3' }, [
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', for: 'model-temp-input', textContent: 'Temperature (0 - 2)' }),
+              tempInp
+            ]),
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', for: 'model-tokens-input', textContent: 'Max Tokens (1 - 2000)' }),
+              tokensInp
+            ]),
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', for: 'model-turns-input', textContent: 'Riwayat Giliran (0 - 20)' }),
+              turnsInp
+            ])
+          ]),
+          errorBanner,
+          el('div', { className: 'form-footer', style: 'justify-content: flex-end;' }, [saveBtn])
+        ]);
+
+        container.appendChild(card);
+      }
+
+      /* TAB 6: GUARD */
+      function renderGuardTab(container) {
+        clearEl(container);
+        var s = state.settings;
+        var def = state.defaults || {};
+        var dirtyBadge = el('span', { className: 'badge badge-warn hidden', textContent: 'Belum disimpan' });
+        var errorBanner = el('div', { className: 'field-error hidden', role: 'alert' });
+
+        var maxCharsInp = el('input', { type: 'number', min: '20', max: '5000', className: 'text-input mono', value: String(s.max_input_chars) });
+        var rateInp = el('input', { type: 'number', min: '1', max: '120', className: 'text-input mono', value: String(s.rate_limit_per_min) });
+        var groupCdInp = el('input', { type: 'number', min: '0', max: '3600', className: 'text-input mono', value: String(s.group_cooldown_sec) });
+        var strikeLimitInp = el('input', { type: 'number', min: '1', max: '20', className: 'text-input mono', value: String(s.strike_limit) });
+        var strikeWinInp = el('input', { type: 'number', min: '1', max: '1440', className: 'text-input mono', value: String(s.strike_window_min) });
+        var muteMinInp = el('input', { type: 'number', min: '1', max: '10080', className: 'text-input mono', value: String(s.mute_minutes) });
+
+        var privChk = el('input', { type: 'checkbox', className: 'switch-input', checked: Boolean(s.private_enabled) });
+        var grpChk = el('input', { type: 'checkbox', className: 'switch-input', checked: Boolean(s.group_enabled) });
+        var allowChk = el('input', { type: 'checkbox', className: 'switch-input', checked: Boolean(s.allowlist_enabled) });
+
+        var prefixInp = el('input', { type: 'text', className: 'text-input mono', maxLength: '32', value: s.trigger_prefix || '' });
+
+        var logSelect = el('select', { className: 'select-input mono' }, [
+          el('option', { value: 'trace', selected: s.log_level === 'trace', textContent: 'trace' }),
+          el('option', { value: 'debug', selected: s.log_level === 'debug', textContent: 'debug' }),
+          el('option', { value: 'info', selected: s.log_level === 'info', textContent: 'info' }),
+          el('option', { value: 'warn', selected: s.log_level === 'warn', textContent: 'warn' }),
+          el('option', { value: 'error', selected: s.log_level === 'error', textContent: 'error' }),
+          el('option', { value: 'fatal', selected: s.log_level === 'fatal', textContent: 'fatal' })
+        ]);
+
+        var groupsArea = el('textarea', { className: 'textarea-input mono', rows: '3', placeholder: 'Satu JID grup (@g.us) per baris' });
+        groupsArea.value = (s.allowed_groups || []).join('\n');
+
+        var blockArea = el('textarea', { className: 'textarea-input mono', rows: '3', placeholder: 'Satu nomor (628...) atau JID per baris' });
+        blockArea.value = (s.blocklist || []).join('\n');
+
+        var allowArea = el('textarea', { className: 'textarea-input mono', rows: '3', placeholder: 'Satu nomor (628...) atau JID per baris' });
+        allowArea.value = (s.allowlist || []).join('\n');
+
+        var injArea = el('textarea', { className: 'textarea-input mono', rows: '7', placeholder: 'Satu pola RegExp per baris' });
+        injArea.value = (s.injection_patterns || []).join('\n');
+
+        function splitLines(txt) {
+          return txt.split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean);
+        }
+
+        function getDraft() {
+          return {
+            max_input_chars: Number.parseInt(maxCharsInp.value, 10),
+            rate_limit_per_min: Number.parseInt(rateInp.value, 10),
+            group_cooldown_sec: Number.parseInt(groupCdInp.value, 10),
+            strike_limit: Number.parseInt(strikeLimitInp.value, 10),
+            strike_window_min: Number.parseInt(strikeWinInp.value, 10),
+            mute_minutes: Number.parseInt(muteMinInp.value, 10),
+            private_enabled: privChk.checked,
+            group_enabled: grpChk.checked,
+            allowlist_enabled: allowChk.checked,
+            trigger_prefix: prefixInp.value.trim(),
+            log_level: logSelect.value,
+            allowed_groups: splitLines(groupsArea.value),
+            blocklist: splitLines(blockArea.value),
+            allowlist: splitLines(allowArea.value),
+            injection_patterns: splitLines(injArea.value)
+          };
+        }
+
+        function syncDirty() {
+          var patch = computeChangedSettings(getDraft(), state.settings);
+          if (Object.keys(patch).length > 0) {
+            dirtyBadge.classList.remove('hidden');
+          } else {
+            dirtyBadge.classList.add('hidden');
+          }
+        }
+
+        [maxCharsInp, rateInp, groupCdInp, strikeLimitInp, strikeWinInp, muteMinInp, prefixInp, groupsArea, blockArea, allowArea, injArea].forEach(function (inp) {
+          inp.addEventListener('input', syncDirty);
+        });
+        [privChk, grpChk, allowChk, logSelect].forEach(function (inp) {
+          inp.addEventListener('change', syncDirty);
+        });
+
+        var saveBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-primary',
+          textContent: 'Simpan',
+          onClick: function () {
+            var patch = computeChangedSettings(getDraft(), state.settings);
+            if (Object.keys(patch).length === 0) {
+              showToast('Tidak ada perubahan untuk disimpan.');
+              return;
+            }
+            errorBanner.classList.add('hidden');
+            saveBtn.disabled = true;
+            apiFetch('/api/settings', { method: 'PUT', body: patch })
+              .then(function (res) {
+                state.settings = res.settings;
+                syncDirty();
+                showToast('Pengaturan guard berhasil disimpan.');
+              })
+              .catch(function (err) {
+                errorBanner.textContent = err.message || 'Gagal menyimpan pengaturan guard.';
+                errorBanner.classList.remove('hidden');
+              })
+              .finally(function () {
+                saveBtn.disabled = false;
+              });
+          }
+        });
+
+        var resetBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-secondary',
+          textContent: 'Reset',
+          onClick: function () {
+            openConfirmModal({
+              title: 'Reset Pengaturan Guard',
+              message: 'Kembalikan batas karakter, rate limit, dan pola injeksi ke nilai bawaan?',
+              confirmLabel: 'Reset',
+              danger: true,
+              onConfirm: function () {
+                maxCharsInp.value = String(def.max_input_chars || 500);
+                rateInp.value = String(def.rate_limit_per_min || 5);
+                groupCdInp.value = String(def.group_cooldown_sec || 20);
+                strikeLimitInp.value = String(def.strike_limit || 3);
+                strikeWinInp.value = String(def.strike_window_min || 60);
+                muteMinInp.value = String(def.mute_minutes || 60);
+                privChk.checked = Boolean(def.private_enabled);
+                grpChk.checked = Boolean(def.group_enabled);
+                allowChk.checked = Boolean(def.allowlist_enabled);
+                prefixInp.value = def.trigger_prefix || '!kaliber';
+                logSelect.value = def.log_level || 'warn';
+                injArea.value = (def.injection_patterns || []).join('\n');
+                syncDirty();
+              }
+            });
+          }
+        });
+
+        var card = el('section', { className: 'card-base' }, [
+          el('div', { className: 'card-header' }, [
+            el('div', null, [
+              el('h2', { className: 'card-title', textContent: 'Perlindungan Guard dan Anti-Injeksi' }),
+              el('p', { className: 'card-desc', textContent: 'Kelola batas laju pesan, izin grup, daftar blokir, dan deteksi prompt injection.' })
+            ]),
+            dirtyBadge
+          ]),
+          el('div', { className: 'form-grid-3' }, [
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', textContent: 'Maks Karakter Input (20 - 5000)' }),
+              maxCharsInp
+            ]),
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', textContent: 'Rate Limit / Menit (1 - 120)' }),
+              rateInp
+            ]),
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', textContent: 'Cooldown Grup Detik (0 - 3600)' }),
+              groupCdInp
+            ])
+          ]),
+          el('div', { className: 'form-grid-3' }, [
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', textContent: 'Batas Strike (1 - 20)' }),
+              strikeLimitInp
+            ]),
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', textContent: 'Jendela Strike Menit (1 - 1440)' }),
+              strikeWinInp
+            ]),
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', textContent: 'Durasi Mute Menit (1 - 10080)' }),
+              muteMinInp
+            ])
+          ]),
+          el('div', { style: 'margin-bottom: 16px;' }, [
+            el('div', { className: 'switch-row' }, [
+              el('span', { textContent: 'Aktifkan Balasan Chat Pribadi (private_enabled)' }),
+              privChk
+            ]),
+            el('div', { className: 'switch-row' }, [
+              el('span', { textContent: 'Aktifkan Balasan Grup (group_enabled)' }),
+              grpChk
+            ]),
+            el('div', { className: 'switch-row' }, [
+              el('span', { textContent: 'Aktifkan Mode Hanya Allowlist (allowlist_enabled)' }),
+              allowChk
+            ])
+          ]),
+          el('div', { className: 'form-grid-2' }, [
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', textContent: 'Awalan Pemicu Grup (trigger_prefix)' }),
+              prefixInp
+            ]),
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', textContent: 'Level Log Server (log_level)' }),
+              logSelect
+            ])
+          ]),
+          el('div', { className: 'form-grid-3' }, [
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', textContent: 'Grup Diizinkan (allowed_groups)' }),
+              groupsArea
+            ]),
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', textContent: 'Daftar Blokir (blocklist)' }),
+              blockArea
+            ]),
+            el('div', { className: 'field-group' }, [
+              el('label', { className: 'field-label', textContent: 'Daftar Izin (allowlist)' }),
+              allowArea
+            ])
+          ]),
+          el('div', { className: 'field-group' }, [
+            el('label', { className: 'field-label', textContent: 'Pola Regex Prompt Injection (satu pola per baris, maks 50)' }),
+            injArea,
+            el('p', { className: 'field-hint', textContent: 'Setiap pola diuji otomatis terhadap risiko ReDoS sebelum disimpan.' })
+          ]),
+          errorBanner,
+          el('div', { className: 'form-footer' }, [
+            resetBtn,
+            saveBtn
+          ])
+        ]);
+
+        container.appendChild(card);
+      }
+
+      /* TAB 7: UJI COBA */
+      function mapStatusBadge(st) {
+        if (st === 'ok') return { text: 'ok', cls: 'badge-success' };
+        if (st === 'injection' || st === 'blocked' || st === 'error') return { text: st, cls: 'badge-error' };
+        if (st === 'ratelimit') return { text: st, cls: 'badge-warn' };
+        return { text: st || 'info', cls: 'badge-neutral' };
+      }
+
+      function renderUjiCobaTab(container) {
+        clearEl(container);
+        var transcript = el('div', { className: 'chat-transcript' });
+        var errorBox = el('div', { className: 'field-error hidden' });
+
+        function renderTranscriptItems() {
+          clearEl(transcript);
+          if (state.chatHistory.length === 0) {
+            transcript.appendChild(
+              el('div', {
+                className: 'empty-state',
+                textContent: 'Belum ada pesan uji coba. Ketik pesan di bawah lalu tekan Enter untuk menguji alur pipeline tanpa mengirim ke WhatsApp.'
+              })
+            );
+            return;
+          }
+          for (var i = 0; i < state.chatHistory.length; i++) {
+            var item = state.chatHistory[i];
+            if (item.role === 'user') {
+              transcript.appendChild(
+                el('div', { className: 'chat-item' }, [
+                  el('div', { className: 'chat-role', textContent: 'Pengguna (admin-test)' }),
+                  el('div', { className: 'chat-bubble', textContent: item.text })
+                ])
+              );
+            } else {
+              var b = mapStatusBadge(item.status);
+              var metaChildren = [
+                el('span', { className: 'badge ' + b.cls, textContent: b.text }),
+                el('span', { className: 'mono', textContent: (item.latencyMs || 0) + ' ms' })
+              ];
+              if (item.model) {
+                metaChildren.push(el('span', { className: 'mono', textContent: 'Model: ' + item.model }));
+              }
+              if (Array.isArray(item.flags) && item.flags.length > 0) {
+                metaChildren.push(el('span', { className: 'mono', textContent: 'Flags: ' + item.flags.join(', ') }));
+              }
+              transcript.appendChild(
+                el('div', { className: 'chat-item' }, [
+                  el('div', { className: 'chat-role', textContent: 'Kaliber Bot' }),
+                  el('div', { className: 'chat-bubble', textContent: item.reply || '(Tidak ada balasan teks)' }),
+                  el('div', { className: 'chat-meta' }, metaChildren)
+                ])
+              );
+            }
+          }
+          transcript.scrollTop = transcript.scrollHeight;
+        }
+
+        renderTranscriptItems();
+
+        var chatInput = el('textarea', {
+          id: 'test-chat-input',
+          className: 'textarea-input',
+          rows: '3',
+          placeholder: 'Tulis pesan uji coba di sini... (Enter untuk kirim, Shift+Enter baris baru)'
+        });
+
+        var sendBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-primary',
+          textContent: 'Kirim'
+        });
+
+        function submitTestMessage() {
+          var text = chatInput.value.trim();
+          if (!text || sendBtn.disabled) return;
+          errorBox.classList.add('hidden');
+          chatInput.value = '';
+          state.chatHistory.push({ role: 'user', text: text });
+          renderTranscriptItems();
+
+          sendBtn.disabled = true;
+          sendBtn.textContent = 'Memproses...';
+          apiFetch('/api/test', { method: 'POST', body: { text: text } })
+            .then(function (res) {
+              state.chatHistory.push({
+                role: 'assistant',
+                reply: res.reply,
+                status: res.status,
+                flags: res.flags || [],
+                model: res.model,
+                latencyMs: res.latencyMs
+              });
+              renderTranscriptItems();
+            })
+            .catch(function (err) {
+              errorBox.textContent = err.message || 'Gagal menjalankan simulasi pesan.';
+              errorBox.classList.remove('hidden');
+            })
+            .finally(function () {
+              sendBtn.disabled = false;
+              sendBtn.textContent = 'Kirim';
+              chatInput.focus();
+            });
+        }
+
+        sendBtn.addEventListener('click', submitTestMessage);
+        chatInput.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            submitTestMessage();
+          }
+        });
+
+        var clearBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-secondary btn-sm',
+          textContent: 'Bersihkan',
+          onClick: function () {
+            state.chatHistory = [];
+            renderTranscriptItems();
+          }
+        });
+
+        var card = el('section', { className: 'card-base' }, [
+          el('div', { className: 'card-header' }, [
+            el('div', null, [
+              el('h2', { className: 'card-title', textContent: 'Simulasi Pipeline Pesan' }),
+              el('p', {
+                className: 'card-desc',
+                textContent: 'Menguji normalisasi, batas panjang karakter, deteksi injeksi, prompt, dan LLM. Riwayat percakapan di layar ini hanya tersimpan di memori halaman.'
+              })
+            ]),
+            clearBtn
+          ]),
+          transcript,
+          el('div', { className: 'field-group' }, [
+            el('label', { className: 'field-label', for: 'test-chat-input', textContent: 'Pesan Uji Coba' }),
+            chatInput,
+            errorBox
+          ]),
+          el('div', { className: 'btn-row', style: 'justify-content: flex-end;' }, [sendBtn])
+        ]);
+
+        container.appendChild(card);
+      }
+
+      /* TAB 8: LOG & AUDIT */
+      function loadLogTab(container) {
+        renderSkeleton(container);
+        Promise.all([
+          apiFetch('/api/logs'),
+          apiFetch('/api/audit')
+        ])
+          .then(function (results) {
+            var rawLogs = results[0];
+            var rawAudit = results[1];
+            state.logs = Array.isArray(rawLogs) ? rawLogs : (rawLogs.logs || []);
+            state.audit = Array.isArray(rawAudit) ? rawAudit : (rawAudit.audit || []);
+            if (state.activeTab === 'log') {
+              renderLogTab(container);
+            }
+          })
+          .catch(function (err) {
+            clearEl(container);
+            container.appendChild(
+              el('div', { className: 'card-base' }, [
+                el('div', { className: 'field-error', textContent: err.message || 'Gagal memuat data log.' }),
+                el('button', {
+                  type: 'button',
+                  className: 'btn btn-secondary',
+                  style: 'margin-top: 12px;',
+                  textContent: 'Muat ulang',
+                  onClick: function () { loadLogTab(container); }
+                })
+              ])
+            );
+          });
+      }
+
+      function renderLogTab(container) {
+        clearEl(container);
+
+        var reloadBtn = el('button', {
+          type: 'button',
+          className: 'btn btn-secondary btn-sm',
+          textContent: 'Muat ulang',
+          onClick: function () { loadLogTab(container); }
+        });
+
+        /* Tabel 100 Log Terakhir */
+        var logContent;
+        if (state.logs.length === 0) {
+          logContent = el('div', {
+            className: 'empty-state',
+            textContent: 'Belum ada catatan aktivitas pesan. Log akan muncul setelah bot menerima pesan WhatsApp atau simulasi dari tab Uji Coba.'
+          });
+        } else {
+          var tbody = el('tbody');
+          for (var i = 0; i < state.logs.length; i++) {
+            var row = state.logs[i];
+            var stBadge = mapStatusBadge(row.status);
+            tbody.appendChild(
+              el('tr', null, [
+                el('td', { 'data-label': 'Waktu', className: 'mono', textContent: formatTimestamp(row.ts) }),
+                el('td', { 'data-label': 'Chat ID', className: 'mono', textContent: row.chat_id }),
+                el('td', { 'data-label': 'Pesan', textContent: row.message }),
+                el('td', { 'data-label': 'Balasan', textContent: row.reply || '-' }),
+                el('td', { 'data-label': 'Status' }, [
+                  el('span', { className: 'badge ' + stBadge.cls, textContent: stBadge.text })
+                ]),
+                el('td', { 'data-label': 'Model', className: 'mono', textContent: row.model || '-' }),
+                el('td', { 'data-label': 'Latensi', className: 'mono', textContent: (row.latency_ms || 0) + ' ms' })
+              ])
+            );
+          }
+          logContent = el('table', { className: 'comparison-table' }, [
+            el('thead', null, [
+              el('tr', null, [
+                el('th', { textContent: 'Waktu' }),
+                el('th', { textContent: 'Chat ID' }),
+                el('th', { textContent: 'Pesan' }),
+                el('th', { textContent: 'Balasan' }),
+                el('th', { textContent: 'Status' }),
+                el('th', { textContent: 'Model' }),
+                el('th', { textContent: 'Latensi' })
+              ])
+            ]),
+            tbody
+          ]);
+        }
+
+        var logsCard = el('section', { className: 'card-base' }, [
+          el('div', { className: 'card-header' }, [
+            el('div', null, [
+              el('h2', { className: 'card-title', textContent: 'Log Aktivitas Pesan (100 Terakhir)' }),
+              el('p', { className: 'card-desc', textContent: 'Nomor pengirim dan chat_id ditampilkan lengkap tanpa sensor.' })
+            ]),
+            reloadBtn
+          ]),
+          logContent
+        ]);
+
+        /* Tabel 50 Audit Terakhir */
+        var auditContent;
+        if (state.audit.length === 0) {
+          auditContent = el('div', {
+            className: 'empty-state',
+            textContent: 'Belum ada catatan audit pembukaan API key.'
+          });
+        } else {
+          var auditTbody = el('tbody');
+          for (var j = 0; j < state.audit.length; j++) {
+            var a = state.audit[j];
+            var ok = Number(a.success) === 1;
+            auditTbody.appendChild(
+              el('tr', null, [
+                el('td', { 'data-label': 'Waktu', className: 'mono', textContent: formatTimestamp(a.ts) }),
+                el('td', { 'data-label': 'Label Key', className: 'mono', textContent: a.keyLabel || ('#' + a.key_id) }),
+                el('td', { 'data-label': 'IP Klien', className: 'mono', textContent: a.ip }),
+                el('td', { 'data-label': 'Hasil' }, [
+                  el('span', {
+                    className: 'badge ' + (ok ? 'badge-success' : 'badge-error'),
+                    textContent: a.result || (ok ? 'ok' : 'failed')
+                  })
+                ])
+              ])
+            );
+          }
+          auditContent = el('table', { className: 'comparison-table' }, [
+            el('thead', null, [
+              el('tr', null, [
+                el('th', { textContent: 'Waktu' }),
+                el('th', { textContent: 'Label Key' }),
+                el('th', { textContent: 'IP Klien' }),
+                el('th', { textContent: 'Hasil' })
+              ])
+            ]),
+            auditTbody
+          ]);
+        }
+
+        var auditCard = el('section', { className: 'card-base' }, [
+          el('div', { className: 'card-header' }, [
+            el('div', null, [
+              el('h2', { className: 'card-title', textContent: 'Audit Pembukaan API Key (50 Terakhir)' }),
+              el('p', { className: 'card-desc', textContent: 'Catatan setiap percobaan melihat API key melalui password reveal.' })
+            ])
+          ]),
+          auditContent
+        ]);
+
+        container.appendChild(logsCard);
+        container.appendChild(auditCard);
+      }
+
+      /* Inisialisasi Event Global */
+      function initApp() {
+        updateThemeButtonLabel();
+
+        var themeBtn = document.getElementById('theme-toggle-btn');
+        if (themeBtn) {
+          themeBtn.addEventListener('click', toggleTheme);
+        }
+
+        var logoutBtn = document.getElementById('logout-admin-btn');
+        if (logoutBtn) {
+          logoutBtn.addEventListener('click', function () {
+            handleUnauthorized();
+            showToast('Anda telah keluar dari panel admin.');
+          });
+        }
+
+        var modalRoot = document.getElementById('modal-root');
+        if (modalRoot) {
+          modalRoot.addEventListener('click', function (e) {
+            if (e.target === modalRoot) {
+              closeModal();
+            }
+          });
+        }
+
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape') {
+            closeModal();
+          }
+        });
+
+        var loginForm = document.getElementById('login-form');
+        var loginInput = document.getElementById('login-token-input');
+        var loginError = document.getElementById('login-error');
+        var loginBtn = document.getElementById('login-submit-btn');
+
+        if (loginForm) {
+          loginForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var candidate = loginInput.value.trim();
+            if (!candidate) {
+              loginError.textContent = 'Masukkan token admin terlebih dahulu.';
+              loginError.classList.remove('hidden');
+              return;
+            }
+            loginError.classList.add('hidden');
+            loginBtn.disabled = true;
+            apiFetch('/api/status', { tokenOverride: candidate, skipAuthRedirect: true })
+              .then(function (statusData) {
+                setToken(candidate);
+                loginInput.value = '';
+                state.status = statusData;
+                updateHeaderBadge();
+                showApp();
+              })
+              .catch(function (err) {
+                loginError.textContent = err.status === 429
+                  ? 'Terlalu banyak percobaan, coba lagi nanti.'
+                  : 'Token admin tidak valid. Silakan periksa kembali.';
+                loginError.classList.remove('hidden');
+              })
+              .finally(function () {
+                loginBtn.disabled = false;
+              });
+          });
+        }
+
+        var existingToken = getToken();
+        if (existingToken) {
+          apiFetch('/api/status', { skipAuthRedirect: true })
+            .then(function (statusData) {
+              state.status = statusData;
+              updateHeaderBadge();
+              showApp();
+            })
+            .catch(function () {
+              handleUnauthorized();
+            });
+        } else {
+          handleUnauthorized();
+        }
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initApp);
+      } else {
+        initApp();
+      }
+    })();
+  </script>
+</body>
+</html>

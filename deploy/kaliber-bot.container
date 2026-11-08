@@ -1,0 +1,32 @@
+[Unit]
+Description=Kaliber Bot WhatsApp & Web Admin (Rootless Podman)
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=localhost/kaliber-bot:latest
+ContainerName=kaliber-bot
+AutoUpdate=none
+PublishPort=127.0.0.1:3000:3000
+# Fallback bila 9router di host tidak terjangkau lewat host.containers.internal:
+# Aktifkan Network=host di bawah, hapus baris PublishPort, dan ubah Environment=HOST=127.0.0.1
+# Network=host
+Volume=kaliber-data:/data
+EnvironmentFile=%h/.config/kaliber-bot/env
+Environment=TZ=Asia/Jakarta
+Environment=HOST=0.0.0.0
+Environment=DATA_DIR=/data
+Memory=256m
+LogDriver=journald
+NoNewPrivileges=true
+HealthCmd=wget -q -O /dev/null http://127.0.0.1:3000/healthz
+HealthInterval=30s
+HealthStartPeriod=20s
+HealthRetries=3
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

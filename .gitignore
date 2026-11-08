@@ -2,6 +2,7 @@ node_modules/
 dist/
 dist-test/
 data/
+data.bak/
 wa-auth/
 .env
 .env.*
