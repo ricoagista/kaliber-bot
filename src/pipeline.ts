@@ -74,7 +74,8 @@ export async function handleMessage(msg: IncomingMessage): Promise<PipelineResul
     };
   }
 
-  let workingText = (msg.text ?? '').trim();
+  const rawText = (msg.text ?? '').trim();
+  let workingText = rawText;
 
   // 2. Apakah teks kosong?
   if (!workingText) {
@@ -182,7 +183,7 @@ export async function handleMessage(msg: IncomingMessage): Promise<PipelineResul
     insertLog({
       ts: startTime,
       chatId: msg.chatId,
-      message: guard.normalized || workingText,
+      message: rawText,
       reply: guard.reply ?? null,
       status: logStatus,
       latencyMs,
@@ -209,7 +210,7 @@ export async function handleMessage(msg: IncomingMessage): Promise<PipelineResul
     insertLog({
       ts: startTime,
       chatId: msg.chatId,
-      message: normalized,
+      message: rawText,
       reply,
       status: 'ok',
       latencyMs,
@@ -243,7 +244,7 @@ export async function handleMessage(msg: IncomingMessage): Promise<PipelineResul
       insertLog({
         ts: startTime,
         chatId: msg.chatId,
-        message: normalized,
+        message: rawText,
         reply,
         status: 'error',
         latencyMs,
@@ -268,7 +269,7 @@ export async function handleMessage(msg: IncomingMessage): Promise<PipelineResul
       insertLog({
         ts: startTime,
         chatId: msg.chatId,
-        message: normalized,
+        message: rawText,
         reply: sanitized.text,
         status: 'blocked',
         latencyMs,
@@ -291,7 +292,7 @@ export async function handleMessage(msg: IncomingMessage): Promise<PipelineResul
     insertLog({
       ts: startTime,
       chatId: msg.chatId,
-      message: normalized,
+      message: rawText,
       reply: sanitized.text,
       status: 'ok',
       latencyMs,

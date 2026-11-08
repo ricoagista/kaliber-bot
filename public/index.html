@@ -289,6 +289,28 @@
       }
     }
 
+    @media (max-width: 480px) {
+      .app-header {
+        height: auto;
+        min-height: 56px;
+        padding: var(--space-xs) 0;
+      }
+      .header-inner {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .brand-group {
+        gap: var(--space-xs);
+      }
+      .header-actions {
+        gap: 6px;
+      }
+      .header-actions .btn-sm {
+        padding: 5px 10px;
+        font-size: 12px;
+      }
+    }
+
     /* Kartu & Seksi */
     .card-base {
       background-color: var(--bg-surface);
@@ -1292,10 +1314,10 @@
         var m = Math.floor((s % 3600) / 60);
         var rem = s % 60;
         var parts = [];
-        if (d > 0) parts.push(d + 'h');
-        if (h > 0 || d > 0) parts.push(h + 'j');
-        if (m > 0 || h > 0 || d > 0) parts.push(m + 'm');
-        parts.push(rem + 'd');
+        if (d > 0) parts.push(d + ' hari');
+        if (h > 0 || d > 0) parts.push(h + ' jam');
+        if (m > 0 || h > 0 || d > 0) parts.push(m + ' mnt');
+        parts.push(rem + ' dtk');
         return parts.join(' ');
       }
 

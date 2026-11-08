@@ -81,6 +81,7 @@ export class WaBot implements WaController {
   private lastError: string | null = null;
   private loggedOut = false;
   private stopping = false;
+  private socketReady = false;
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connectingPromise: Promise<void> | null = null;
@@ -141,7 +142,7 @@ export class WaBot implements WaController {
   }
 
   private waitForSocketOpen(timeoutMs = 15_000): Promise<void> {
-    if (this.sock && (this.qrDataUrl || this.state === 'connecting')) {
+    if (this.sock && (this.socketReady || this.qrDataUrl !== null || this.state === 'open')) {
       return Promise.resolve();
     }
     return new Promise<void>((resolve, reject) => {
@@ -181,6 +182,7 @@ export class WaBot implements WaController {
     const { state: authState, saveCreds } = await useMultiFileAuthState(this.authDir);
     this.creds = authState.creds;
     this.state = 'connecting';
+    this.socketReady = false;
 
     const baileysLogger = logger.child({ module: 'baileys' });
     baileysLogger.level = 'silent';
@@ -198,15 +200,18 @@ export class WaBot implements WaController {
     this.sock = sock;
 
     sock.ev.on('creds.update', () => {
+      if (this.sock !== sock) return;
       this.creds = authState.creds;
       void saveCreds();
     });
 
     sock.ev.on('connection.update', async (update) => {
+      if (this.sock !== sock) return;
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
         this.state = 'connecting';
+        this.socketReady = true;
         try {
           this.qrDataUrl = await QRCode.toDataURL(qr, { width: 256, margin: 1 });
         } catch (err) {
@@ -217,6 +222,7 @@ export class WaBot implements WaController {
 
       if (connection === 'open') {
         this.state = 'open';
+        this.socketReady = true;
         this.loggedOut = false;
         this.reconnectAttempt = 0;
         this.qrDataUrl = null;
@@ -229,6 +235,8 @@ export class WaBot implements WaController {
       }
 
       if (connection === 'close') {
+        if (this.sock !== sock) return;
+        this.socketReady = false;
         const errObj = lastDisconnect?.error as {
           message?: string;
           output?: { statusCode?: number };
@@ -242,8 +250,25 @@ export class WaBot implements WaController {
           this.qrDataUrl = null;
           this.pairingCode = null;
           this.me = null;
+          this.sock = null;
+          this.reconnectAttempt = 0;
           this.clearAuthDir();
-          logger.warn('Sesi WhatsApp logged out. Direktori wa-auth dibersihkan.');
+          logger.warn('Sesi WhatsApp logged out. Direktori wa-auth dibersihkan, menginisialisasi ulang socket untuk QR baru.');
+          if (!this.stopping) {
+            void this.connect();
+          }
+          return;
+        }
+
+        if (statusCode === DisconnectReason.connectionReplaced) {
+          this.state = 'disconnected';
+          this.qrDataUrl = null;
+          this.pairingCode = null;
+          this.lastError = 'Sesi digantikan oleh koneksi lain (konflik 440).';
+          logger.warn(
+            { statusCode },
+            'Koneksi WhatsApp digantikan oleh instance lain (440). Rekoneksi otomatis dihentikan.'
+          );
           return;
         }
 
@@ -302,17 +327,19 @@ export class WaBot implements WaController {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    if (this.sock) {
+    const oldSock = this.sock;
+    this.sock = null;
+    this.socketReady = false;
+    if (oldSock) {
       try {
-        await this.sock.logout();
+        await oldSock.logout();
       } catch {
         try {
-          this.sock.end(undefined);
+          oldSock.end(undefined);
         } catch {
           // Abaikan
         }
       }
-      this.sock = null;
     }
     this.clearAuthDir();
     this.state = 'disconnected';
