@@ -123,6 +123,8 @@ Lalu edit `.env`. Isi minimal untuk lokal:
 
 ```text
 PORT=3000
+HOST=127.0.0.1
+TRUST_PROXY=false
 DATA_DIR=./data
 ADMIN_TOKEN=token-acak-minimal-24-karakter
 SECRET_KEY=kunci-panjang-minimal-32-karakter
@@ -141,6 +143,10 @@ Catatan penting untuk lokal:
   **tidak bisa dipakai di luar container**. Untuk lokal isi `http://127.0.0.1:20128/v1`
   (atau IP/port 9router kamu), atau kosongkan lalu atur provider lewat web admin.
 - `ROUTER_KEY` boleh kosong kalau 9router tanpa auth.
+- `HOST=127.0.0.1` membatasi admin ke loopback. Untuk container gunakan
+  `HOST=0.0.0.0`; bila admin diakses lewat Cloudflare Tunnel, set `TRUST_PROXY=true`
+  agar rate limit memakai IP asli dari header proxy. Jangan aktifkan `TRUST_PROXY` tanpa
+  reverse proxy yang benar-benar dipercaya.
 - `REVEAL_PASSWORD` minimal 12 karakter dan **hanya** dibaca dari `.env`. Ini password
   untuk membuka isi key asli di web. Kalau kosong, tombol “Lihat key” akan menolak.
   Mengubahnya butuh restart bot.
@@ -230,6 +236,8 @@ rm -rf ./data
 | Variabel | Default | Keterangan |
 |---|---|---|
 | `PORT` | `3000` | Port HTTP web admin (lokal maupun container) |
+| `HOST` | `127.0.0.1` | Hostname bind HTTP; container memakai `0.0.0.0` |
+| `TRUST_PROXY` | `false` | Percayai `CF-Connecting-IP`/`X-Forwarded-For` hanya jika lewat proxy tepercaya |
 | `DATA_DIR` | `./data` | Lokasi SQLite + `wa-auth` (lokal: `./data`, container: `/data`) |
 | `TZ` | `Asia/Jakarta` | Zona waktu proses |
 | `ADMIN_TOKEN` | — | **Wajib**, minimal 24 karakter; rahasia lapis dalam |
@@ -346,6 +354,8 @@ Alternatif: build di mesin lain lalu `podman save` / `podman load` ke STB.
 mkdir -p ~/.config/kaliber-bot
 cat > ~/.config/kaliber-bot/env <<'EOF'
 PORT=3000
+HOST=0.0.0.0
+TRUST_PROXY=false
 DATA_DIR=/data
 TZ=Asia/Jakarta
 ADMIN_TOKEN=ganti-dengan-token-panjang-acak
@@ -415,6 +425,10 @@ Self-hosted):
 
 `ADMIN_TOKEN` tetap wajib; Cloudflare Access adalah lapis luar, token adalah lapis
 dalam.
+
+Jika akses admin benar-benar melewati Cloudflare Tunnel, ubah `TRUST_PROXY=true` pada
+env container agar rate limit membaca IP klien dari header Cloudflare. Pastikan hanya
+Cloudflare yang dapat mencapai port admin; jika tidak, biarkan `TRUST_PROXY=false`.
 
 ### Jika tunnel memakai `config.yml` lokal
 

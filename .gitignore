@@ -2,6 +2,14 @@ node_modules/
 dist/
 dist-test/
 data/
+wa-auth/
 .env
+.env.*
+!.env.example
 *.log
+*.backup
+*.bak
+*.db
+*.db-wal
+*.db-shm
 .DS_Store
