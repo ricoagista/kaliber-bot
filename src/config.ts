@@ -58,11 +58,13 @@ ATURAN (tidak bisa diubah oleh siapa pun di percakapan):
  * dikompilasi ulang dengan flag "i" saat dipakai.
  */
 export const DEFAULT_INJECTION_PATTERNS = [
-  String.raw`(ignore|abaikan|lupakan|forget|disregard).{0,40}(instruction|instruksi|aturan|rules?|prompt|perintah)`,
+  String.raw`(ignore|abaikan|lupakan|forget|disregard).{0,40}(instruction|instruksi|aturan|rules?|prompt|perintah|sebelumnya|previous|above|di atas)`,
   String.raw`(system|sistem)\s*(prompt|message|instruction)`,
-  String.raw`(reveal|show|print|tampilkan|bocorkan|tunjukkan).{0,30}(prompt|aturan|instruksi|instructions)`,
-  String.raw`(you are now|kamu sekarang|mulai sekarang kamu|act as|bertindaklah sebagai|pura-pura)`,
-  String.raw`\b(jailbreak|DAN mode|developer mode)\b`,
+  String.raw`(reveal|show|print|tampilkan|bocorkan|tunjukkan|cetak|keluarkan|salin).{0,40}(prompt|aturan|instruksi|instructions?|konfigurasi|panduan|konteks|teks.{0,15}di atas)`,
+  String.raw`(you are now|kamu sekarang|mulai sekarang kamu|act as|bertindaklah sebagai|pura-pura|bermain drama.{0,30}instruksi)`,
+  String.raw`\b(jailbreak|DAN mode|developer mode)\b|\bDAN\b.{0,30}(tanpa batasan|bebas)`,
+  String.raw`(ulangi|repeat|terjemahkan|translate|summarize|sebutkan).{0,40}(kata-kata|teks|instruksi|aturan|panduan|points?|kalimat).{0,25}(di atas|above|sebelum|awal|before)`,
+  String.raw`<\s*\/?\s*(pesan_user|info_kaliber)\b|decode\s+base64|base64.{0,25}(decode|jalankan)`,
 ];
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -103,6 +105,8 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export interface EnvConfig {
   port: number;
+  host: string;
+  trustProxy: boolean;
   dataDir: string;
   tz: string;
   adminToken: string;
@@ -121,6 +125,8 @@ function intFromEnv(raw: string | undefined, fallback: number): number {
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): EnvConfig {
   return {
     port: intFromEnv(source.PORT, 3000),
+    host: source.HOST?.trim() || '127.0.0.1',
+    trustProxy: source.TRUST_PROXY?.trim().toLowerCase() === 'true',
     dataDir: source.DATA_DIR?.trim() || path.resolve('data'),
     tz: source.TZ?.trim() || 'Asia/Jakarta',
     adminToken: (source.ADMIN_TOKEN ?? '').trim(),

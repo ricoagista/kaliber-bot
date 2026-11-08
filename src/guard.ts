@@ -30,19 +30,121 @@ const patternCache = new Map<string, CompileResult>();
 
 const RATE_WINDOW_MS = 60_000;
 const NON_TEXT_WINDOW_MS = 60 * 60 * 1000;
+const MAX_PATTERN_LEN = 300;
+const MAX_PATTERNS = 50;
+const MAX_INJECTION_SCAN_CHARS = 2_000;
+
+const HOMOGLYPH_MAP: Record<string, string> = {
+  '\u0430': 'a', '\u0410': 'a', // Cyrillic a
+  '\u0435': 'e', '\u0415': 'e', // Cyrillic e
+  '\u0456': 'i', '\u0406': 'i', // Cyrillic i
+  '\u043E': 'o', '\u041E': 'o', // Cyrillic o
+  '\u0440': 'p', '\u0420': 'p', // Cyrillic r/p
+  '\u0441': 'c', '\u0421': 'c', // Cyrillic s/c
+  '\u0443': 'y', '\u0423': 'y', // Cyrillic u/y
+  '\u0445': 'x', '\u0425': 'x', // Cyrillic kh/x
+  '\u0455': 's', '\u0405': 's', // Cyrillic dze/s
+  '\u03B1': 'a', '\u03B5': 'e', '\u03B9': 'i', '\u03BF': 'o', // Greek
+};
 
 /** Normalisasi Unicode dan buang karakter tak terlihat/kontrol. */
 export function normalizeText(input: string): string {
   return input
     .normalize('NFKC')
-    .replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, '')
+    .replace(/[\u00AD\u034F\u061C\u180E\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF\uFFF9-\uFFFB]/g, '')
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
+function foldConfusables(input: string): string {
+  return input
+    .replace(/[\u0410-\u045F\u0391-\u03C9]/g, (ch) => HOMOGLYPH_MAP[ch] ?? ch)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .normalize('NFC');
+}
+
 export function digitsOf(raw: string): string {
   return raw.replace(/\D/g, '');
+}
+
+/**
+ * Deteksi pola regex yang berisiko ReDoS (nested quantifier, backreference,
+ * batas quantifier berlebih, atau terlalu panjang).
+ */
+export function isUnsafeRegex(pattern: string): boolean {
+  if (pattern.length > MAX_PATTERN_LEN) return true;
+  // Backreference seperti \1 berisiko eksponensial di engine NFA.
+  if (/\\[1-9]/.test(pattern)) return true;
+  // Batas quantifier terlalu besar (> 100).
+  const bounds = pattern.matchAll(/\{\s*(\d+)(?:\s*,\s*(\d*))?\s*\}/g);
+  for (const match of bounds) {
+    const low = Number(match[1] ?? 0);
+    const high = match[2] ? Number(match[2]) : low;
+    if (low > 100 || high > 100) return true;
+  }
+  // Deteksi grup yang memuat quantifier tak terbatas/berulang lalu diikuti quantifier lagi: (a+)+, (.*a){2,}, dll.
+  let depth = 0;
+  const groupHasRepetition: boolean[] = [];
+  for (let i = 0; i < pattern.length; i++) {
+    const ch = pattern[i]!;
+    if (ch === '\\') {
+      i += 1;
+      continue;
+    }
+    if (ch === '[') {
+      while (i + 1 < pattern.length && pattern[i + 1] !== ']') {
+        if (pattern[i + 1] === '\\') i += 1;
+        i += 1;
+      }
+      continue;
+    }
+    if (ch === '(') {
+      depth += 1;
+      groupHasRepetition[depth] = false;
+      continue;
+    }
+    if (ch === ')' && depth > 0) {
+      const hadRep = Boolean(groupHasRepetition[depth]);
+      depth -= 1;
+      if (hadRep && depth > 0) groupHasRepetition[depth] = true;
+      const next = pattern.slice(i + 1);
+      if (hadRep && /^(?:[*+]|{\s*\d+\s*,\s*\d*\s*}|{\s*(?:[2-9]|\d{2,})\s*})/.test(next)) {
+        return true;
+      }
+      continue;
+    }
+    if (depth > 0 && (ch === '+' || ch === '*')) {
+      groupHasRepetition[depth] = true;
+    } else if (depth > 0 && ch === '{') {
+      const rest = pattern.slice(i);
+      if (/^\{\s*\d+\s*,\s*\d*\s*\}/.test(rest) || /^\{\s*(?:[2-9]|\d{2,})\s*\}/.test(rest)) {
+        groupHasRepetition[depth] = true;
+      }
+    }
+  }
+  return false;
+}
+
+function toSquashedRegexSource(raw: string): string {
+  // Hapus \s, \b, dan spasi literal di luar character class agar menangkap "a b a i k a n" / "k.a.m.u".
+  let out = raw.replace(/\\s[*+?]?/g, '').replace(/\\b/g, '');
+  let inClass = false;
+  let cleaned = '';
+  for (let i = 0; i < out.length; i++) {
+    const ch = out[i]!;
+    if (ch === '\\') {
+      cleaned += ch + (out[i + 1] ?? '');
+      i += 1;
+      continue;
+    }
+    if (ch === '[') inClass = true;
+    else if (ch === ']') inClass = false;
+    if (!inClass && ch === ' ') continue;
+    cleaned += ch;
+  }
+  return cleaned;
 }
 
 interface CompileResult {
@@ -59,12 +161,29 @@ export function compilePatterns(patterns: string[]): CompileResult {
   const regexes: RegExp[] = [];
   const squashed: RegExp[] = [];
   const invalid: string[] = [];
-  for (const raw of patterns) {
+  const slice = patterns.slice(0, MAX_PATTERNS);
+  if (patterns.length > MAX_PATTERNS) {
+    invalid.push('terlalu banyak pola regex');
+  }
+  for (const raw of slice) {
     if (typeof raw !== 'string' || raw.trim() === '') continue;
+    if (isUnsafeRegex(raw)) {
+      invalid.push(raw);
+      continue;
+    }
     try {
-      regexes.push(new RegExp(raw, 'i'));
-      // Varian tanpa spasi menangkap serangan "a b a i k a n".
-      squashed.push(new RegExp(raw.replace(/\\s[*+?]?/g, ''), 'i'));
+      const re = new RegExp(raw, 'i');
+      const sq = new RegExp(toSquashedRegexSource(raw), 'i');
+      // Uji cepat terhadap string adversarial pendek untuk mencegah backtracking lambat.
+      const t0 = performance.now();
+      re.test(`${'a'.repeat(28)}!`);
+      sq.test(`${'a'.repeat(28)}!`);
+      if (performance.now() - t0 > 25) {
+        invalid.push(raw);
+        continue;
+      }
+      regexes.push(re);
+      squashed.push(sq);
     } catch {
       invalid.push(raw);
     }
@@ -83,8 +202,10 @@ export function invalidPatterns(patterns: string[]): string[] {
 export function matchesInjection(text: string, patterns: string[]): boolean {
   const { regexes, squashed } = compilePatterns(patterns);
   if (regexes.length === 0) return false;
-  if (regexes.some((re) => re.test(text))) return true;
-  const flat = text.replace(/\s+/g, '');
+  const bounded = normalizeText(text).slice(0, MAX_INJECTION_SCAN_CHARS);
+  const folded = foldConfusables(bounded);
+  if (regexes.some((re) => re.test(bounded) || re.test(folded))) return true;
+  const flat = folded.replace(/[\s._-]+/g, '');
   return squashed.some((re) => re.test(flat));
 }
 
@@ -109,9 +230,21 @@ function isMuted(jids: string[], now: number): boolean {
   return false;
 }
 
+function capMap<K, V>(map: Map<K, V>, max = 2000): void {
+  while (map.size > max) {
+    const oldest = map.keys().next().value;
+    if (oldest === undefined) break;
+    map.delete(oldest);
+  }
+}
+
 function rateAllowed(key: string, now: number, limit: number): boolean {
   const bucket = (rateBuckets.get(key) ?? []).filter((ts) => now - ts < RATE_WINDOW_MS);
-  rateBuckets.set(key, bucket);
+  if (bucket.length === 0) {
+    rateBuckets.delete(key);
+  } else {
+    rateBuckets.set(key, bucket);
+  }
   return bucket.length < limit;
 }
 
@@ -123,6 +256,7 @@ function commitRate(key: string, now: number): void {
     for (const [k, v] of rateBuckets) {
       if (v.every((ts) => now - ts >= RATE_WINDOW_MS)) rateBuckets.delete(k);
     }
+    capMap(rateBuckets, 2000);
   }
 }
 
@@ -206,6 +340,12 @@ export function checkGuard(input: GuardInput): GuardResult {
         return { ok: false, status: 'ratelimit', reply: null, flags: ['group_cooldown'], normalized };
       }
       groupLast.set(input.chatJid, now);
+      if (groupLast.size > 2000) {
+        for (const [k, ts] of groupLast) {
+          if (now - ts >= Math.max(cooldownMs, RATE_WINDOW_MS)) groupLast.delete(k);
+        }
+        capMap(groupLast, 2000);
+      }
     }
     commitRate(key, now);
   }
@@ -232,6 +372,7 @@ export function allowNonTextNotice(jid: string, now: number = Date.now()): boole
     for (const [key, ts] of nonTextNotices) {
       if (now - ts >= NON_TEXT_WINDOW_MS) nonTextNotices.delete(key);
     }
+    capMap(nonTextNotices, 2000);
   }
   return true;
 }

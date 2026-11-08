@@ -12,12 +12,11 @@ export interface PromptInput {
   now?: Date;
 }
 
-/** Netralkan tag yang bisa dipakai untuk menutup/membuka blok prompt. */
+/** Netralkan tag yang bisa dipakai untuk menutup/membuka blok prompt (termasuk variasi spasi/atribut). */
 export function escapeUserText(text: string): string {
-  return text
-    .replace(/<\/pesan_user>/gi, '&lt;/pesan_user&gt;')
-    .replace(/<info_kaliber>/gi, '&lt;info_kaliber&gt;')
-    .replace(/<\/info_kaliber>/gi, '&lt;/info_kaliber&gt;');
+  return text.replace(/<\s*(\/?)\s*(pesan_user|info_kaliber)\b[^>]*>/gi, (_match, slash: string, tag: string) => {
+    return `&lt;${slash}${tag.toLowerCase()}&gt;`;
+  });
 }
 
 export function wrapUserText(text: string): string {
@@ -45,10 +44,12 @@ export function renderSystemPrompt(settings: Settings, now: Date): string {
   if (!template.includes('{{KNOWLEDGE}}')) {
     template += '\n\n<info_kaliber>\n{{KNOWLEDGE}}\n</info_kaliber>';
   }
-  return template
-    .replaceAll('{{NOW}}', formatNowWib(now))
-    .replaceAll('{{CONTACT}}', settings.contact)
-    .replaceAll('{{KNOWLEDGE}}', settings.knowledge);
+  const replacements: Record<string, string> = {
+    '{{NOW}}': formatNowWib(now),
+    '{{CONTACT}}': settings.contact,
+    '{{KNOWLEDGE}}': settings.knowledge,
+  };
+  return template.replace(/\{\{(?:NOW|CONTACT|KNOWLEDGE)\}\}/g, (token) => replacements[token] ?? token);
 }
 
 /**

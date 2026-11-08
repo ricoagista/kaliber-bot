@@ -24,11 +24,24 @@ test('mendeteksi kebocoran 8 kata dari system prompt', () => {
   assert.equal(result.text, FALLBACK);
 });
 
+test('tidak memblokir jawaban yang berasal dari blok <info_kaliber>', () => {
+  const sysWithKnowledge =
+    `${SYSTEM}\n<info_kaliber>\nKaliber adalah lembaga semi otonom mahasiswa informatika universitas muhammadiyah malang.\n</info_kaliber>`;
+  const result = sanitizeOutput(
+    'Kaliber adalah lembaga semi otonom mahasiswa informatika universitas muhammadiyah malang.',
+    { systemPrompt: sysWithKnowledge, fallbackText: FALLBACK },
+  );
+  assert.equal(result.leaked, false);
+});
+
 test('mendeteksi pola rahasia', () => {
   assert.equal(sanitize('key: sk-abcdefghij12345').leaked, true);
+  assert.equal(sanitize('key: gsk_abcdefghij12345').leaked, true);
   assert.equal(sanitize('Authorization: Bearer abc.def').leaked, true);
   assert.equal(sanitize('ROUTER_KEY ada di env').leaked, true);
   assert.equal(sanitize('ADMIN_TOKEN jangan dibocorkan').leaked, true);
+  assert.equal(sanitize('SECRET_KEY rahasia').leaked, true);
+  assert.equal(sanitize('REVEAL_PASSWORD rahasia').leaked, true);
 });
 
 test('mengubah markdown ke format WhatsApp', () => {

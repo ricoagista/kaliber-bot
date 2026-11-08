@@ -16,8 +16,9 @@ export interface LlmOptions {
   sleep?: (ms: number) => Promise<void>;
   // Optional: if provided, use this to resolve model to provider+key
   llmContext?: {
-    resolveModel: (model: string) => Promise<{ baseUrl: string; apiKey: string; providerId: number; keyId: number } | null>;
-    markKeyFailed: (providerId: number, keyId: number, status: number) => Promise<void>;
+    resolveModel: (model: string) => Promise<{ baseUrl: string; apiKey: string; providerId: number; keyId: number; model?: string } | null>;
+    markKeyFailed: (providerId: number, keyId: number, status: number, retryAfterMs?: number) => Promise<void>;
+    markKeySucceeded?: (providerId: number, keyId: number) => Promise<void>;
   };
 }
 
@@ -53,8 +54,13 @@ async function fetchWithEndpointFallback(
   return lastResponse as Response;
 }
 
-function isRetryableStatus(status: number): boolean {
-  return status === 429 || status >= 500;
+function retryAfterMs(response: Response): number {
+  const raw = response.headers.get('retry-after');
+  if (!raw) return 30_000;
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds)) return Math.min(60_000, Math.max(0, seconds * 1000));
+  const date = Date.parse(raw);
+  return Number.isFinite(date) ? Math.min(60_000, Math.max(0, date - Date.now())) : 30_000;
 }
 
 function modelList(options: LlmOptions): string[] {
@@ -95,7 +101,7 @@ export async function callLlm(messages: ChatMessage[], options: LlmOptions): Pro
 
   // If llmContext is provided, use it for model resolution with key rotation
   if (options.llmContext) {
-    const { resolveModel, markKeyFailed } = options.llmContext;
+    const { resolveModel, markKeyFailed, markKeySucceeded } = options.llmContext;
     for (const model of models) {
       for (let attempt = 0; attempt < 2; attempt++) {
         attempts += 1;
@@ -113,7 +119,7 @@ export async function callLlm(messages: ChatMessage[], options: LlmOptions): Pro
             method: 'POST',
             headers,
             body: JSON.stringify({
-              model,
+              model: resolved.model || model,
               messages,
               temperature: options.temperature,
               max_tokens: options.maxTokens,
@@ -124,10 +130,11 @@ export async function callLlm(messages: ChatMessage[], options: LlmOptions): Pro
 
           if (!response.ok) {
             lastError = `http ${response.status}`;
-            if (isRetryableStatus(response.status)) {
-              await markKeyFailed(providerId, keyId, response.status);
+            if (response.status === 401 || response.status === 403 || response.status === 429 || response.status >= 500) {
+              const retryDelay = response.status === 429 ? retryAfterMs(response) : undefined;
+              await markKeyFailed(providerId, keyId, response.status, retryDelay);
               if (attempt === 0) {
-                await sleep(RETRY_DELAY_MS);
+                await sleep(response.status === 429 ? Math.min(RETRY_DELAY_MS, retryAfterMs(response)) : RETRY_DELAY_MS);
                 continue;
               }
             }
@@ -137,12 +144,14 @@ export async function callLlm(messages: ChatMessage[], options: LlmOptions): Pro
           const payload: unknown = await response.json().catch(() => null);
           const content = stripThink(extractContent(payload)).trim();
           if (content !== '') {
+            await markKeySucceeded?.(providerId, keyId);
             return { ok: true, content, model, attempts };
           }
           lastError = 'jawaban kosong';
           break;
         } catch (err) {
           lastError = err instanceof Error ? err.name : 'error jaringan';
+          await markKeyFailed(providerId, keyId, 0);
           if (attempt === 0) {
             await sleep(RETRY_DELAY_MS);
             continue;
@@ -182,7 +191,7 @@ export async function callLlm(messages: ChatMessage[], options: LlmOptions): Pro
 
         if (!response.ok) {
           lastError = `http ${response.status}`;
-          if (isRetryableStatus(response.status) && attempt === 0) {
+          if ((response.status === 429 || response.status >= 500) && attempt === 0) {
             await sleep(RETRY_DELAY_MS);
             continue;
           }
@@ -220,6 +229,8 @@ export interface PingResult {
 /** Tes koneksi singkat ke LLM (provider aktif) untuk dashboard. */
 export async function pingLlm(
   options: {
+    routerUrl?: string;
+    routerKey?: string;
     model: string;
     temperature: number;
     maxTokens: number;
@@ -231,6 +242,8 @@ export async function pingLlm(
 ): Promise<PingResult> {
   const started = Date.now();
   const result = await callLlm([{ role: 'user', content: 'ping' }], {
+    routerUrl: options.routerUrl,
+    routerKey: options.routerKey,
     model: options.model,
     fallbackModels: [],
     fallbackText: '',

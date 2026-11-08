@@ -8,6 +8,7 @@ import {
   isLegacyEncrypted,
 } from './crypto.js';
 import { logger } from './logger.js';
+import { getSettings, updateSettings } from './settings.js';
 
 export interface ProviderRow {
   id: number;
@@ -129,11 +130,13 @@ export function updateProvider(
   patch: Partial<Omit<ProviderRow, 'id' | 'createdAt'>>,
 ): ProviderRow | null {
   const db = getDb();
+  const existing = selectProvider(id);
+  if (!existing) return null;
   db.prepare('UPDATE providers SET name = ?, base_url = ?, enabled = ?, priority = ? WHERE id = ?').run(
-    patch.name ?? '',
-    patch.baseUrl ?? '',
-    patch.enabled === undefined ? 1 : (patch.enabled ? 1 : 0),
-    patch.priority ?? 0,
+    patch.name !== undefined ? patch.name : existing.name,
+    patch.baseUrl !== undefined ? patch.baseUrl : existing.base_url,
+    patch.enabled === undefined ? existing.enabled : (patch.enabled ? 1 : 0),
+    patch.priority !== undefined ? patch.priority : existing.priority,
     id,
   );
   const row = selectProvider(id);
@@ -145,9 +148,15 @@ export function deleteProvider(id: number): boolean {
   const provider = selectProvider(id);
   if (!provider) return false;
   for (const key of listKeys(id)) invalidateKeyCache(key.id);
+  keyCounters.delete(id);
   db.prepare('DELETE FROM provider_keys WHERE provider_id = ?').run(id);
   db.prepare('DELETE FROM providers WHERE id = ?').run(id);
   return true;
+}
+
+export function getKey(id: number): ProviderKeyRow | null {
+  const row = selectKey(id);
+  return row ? mapKey(row) : null;
 }
 
 export function listKeys(providerId: number): ProviderKeyRow[] {
@@ -178,11 +187,27 @@ export function updateKey(
   patch: Partial<Omit<ProviderKeyRow, 'id' | 'providerId' | 'createdAt'>>,
 ): ProviderKeyRow | null {
   const db = getDb();
-  db.prepare('UPDATE provider_keys SET label = ?, enabled = ? WHERE id = ?').run(
-    patch.label ?? '',
-    patch.enabled === undefined ? 1 : (patch.enabled ? 1 : 0),
-    id,
-  );
+  const sets: string[] = [];
+  const values: Array<string | number> = [];
+  if (patch.label !== undefined) {
+    sets.push('label = ?');
+    values.push(patch.label);
+  }
+  if (patch.enabled !== undefined) {
+    sets.push('enabled = ?');
+    values.push(patch.enabled ? 1 : 0);
+  }
+  if (patch.cooldownUntil !== undefined) {
+    sets.push('cooldown_until = ?');
+    values.push(patch.cooldownUntil);
+  }
+  if (patch.failCount !== undefined) {
+    sets.push('fail_count = ?');
+    values.push(patch.failCount);
+  }
+  if (sets.length === 0) return selectKey(id) ? mapKey(selectKey(id)!) : null;
+  values.push(id);
+  db.prepare(`UPDATE provider_keys SET ${sets.join(', ')} WHERE id = ?`).run(...values);
   invalidateKeyCache(id);
   const row = selectKey(id);
   return row ? mapKey(row) : null;
@@ -215,11 +240,13 @@ export interface ResolvedLlmKey {
   apiKey: string;
   providerId: number;
   keyId: number;
+  model: string;
 }
 
 export interface LlmContext {
   resolveModel(modelName: string): Promise<ResolvedLlmKey | null>;
-  markKeyFailed(providerId: number, keyId: number, status: number): Promise<void>;
+  markKeyFailed(providerId: number, keyId: number, status: number, retryAfterMs?: number): Promise<void>;
+  markKeySucceeded(providerId: number, keyId: number): Promise<void>;
 }
 
 const keyCounters = new Map<number, number>();
@@ -228,8 +255,11 @@ export function createLlmContext(): LlmContext {
   return {
     async resolveModel(modelName: string): Promise<ResolvedLlmKey | null> {
       const slash = modelName.indexOf('/');
-      const providerName = slash >= 0 ? modelName.slice(0, slash) : (await defaultProviderName());
-      const actualModel = slash >= 0 ? modelName.slice(slash + 1) : modelName;
+      const requestedProvider = slash >= 0 ? modelName.slice(0, slash) : '';
+      const requested = requestedProvider ? getProviderByName(requestedProvider) : null;
+      const namedProvider = requested?.enabled ? requestedProvider : '';
+      const providerName = namedProvider || (await defaultProviderName());
+      const actualModel = namedProvider ? modelName.slice(slash + 1) : modelName;
       if (!providerName) return null;
       const rawProvider = getDb()
         .prepare('SELECT * FROM providers WHERE name = ?')
@@ -237,14 +267,29 @@ export function createLlmContext(): LlmContext {
       if (!rawProvider || !Boolean(rawProvider.enabled)) return null;
 
       const now = Date.now();
-      const rawKeys = getDb()
-        .prepare('SELECT * FROM provider_keys WHERE provider_id = ? AND enabled = 1 AND cooldown_until <= ? ORDER BY id ASC')
-        .all(rawProvider.id, now) as unknown as RawProviderKeyRow[];
+      const allKeys = getDb()
+        .prepare('SELECT * FROM provider_keys WHERE provider_id = ? ORDER BY id ASC')
+        .all(rawProvider.id) as unknown as RawProviderKeyRow[];
+      // Provider tanpa key sama sekali (mis. 9router lokal tanpa auth) tetap boleh dipakai.
+      if (allKeys.length === 0) {
+        return {
+          baseUrl: mapProvider(rawProvider).baseUrl,
+          apiKey: '',
+          providerId: rawProvider.id,
+          keyId: 0,
+          model: actualModel,
+        };
+      }
+      const rawKeys = allKeys.filter((key) => Boolean(key.enabled));
       if (rawKeys.length === 0) return null;
+      const available = rawKeys.filter((key) => key.cooldown_until <= now);
+      const candidates = available.length > 0
+        ? available
+        : [rawKeys.reduce((nearest, key) => key.cooldown_until < nearest.cooldown_until ? key : nearest)];
 
       const counter = keyCounters.get(rawProvider.id) ?? 0;
-      const rawKey = rawKeys[counter % rawKeys.length]!;
-      keyCounters.set(rawProvider.id, counter + 1);
+      const rawKey = candidates[counter % candidates.length]!;
+      keyCounters.set(rawProvider.id, (counter + 1) % 1_000_000);
 
       const secret = getSecretKey();
       if (!secret) return null;
@@ -256,22 +301,65 @@ export function createLlmContext(): LlmContext {
           apiKey,
           providerId: rawProvider.id,
           keyId: key.id,
+          model: actualModel,
         };
       } catch (err) {
         logger.error({ keyId: rawKey.id, err }, 'gagal dekript key, dilewati');
         return null;
       }
     },
-    async markKeyFailed(_providerId: number, keyId: number, status: number): Promise<void> {
+    async markKeyFailed(
+      _providerId: number,
+      keyId: number,
+      status: number,
+      retryAfterMs?: number,
+    ): Promise<void> {
+      if (keyId <= 0) return;
       const db = getDb();
       const now = Date.now();
       db.prepare('UPDATE provider_keys SET fail_count = fail_count + 1 WHERE id = ?').run(keyId);
-      let cooldownMs = 120_000;
-      if (status === 429) cooldownMs = 300_000;
-      else if (status === 401) cooldownMs = 1_800_000;
+      const key = selectKey(keyId);
+      if (!key) return;
+      const otherKey = db
+        .prepare(
+          'SELECT 1 FROM provider_keys WHERE provider_id = ? AND enabled = 1 AND id != ? LIMIT 1',
+        )
+        .get(key.provider_id, keyId);
+      if (!otherKey) {
+        db.prepare('UPDATE provider_keys SET cooldown_until = 0 WHERE id = ?').run(keyId);
+        return;
+      }
+      let cooldownMs = 5_000;
+      if (status === 429) cooldownMs = Math.min(60_000, Math.max(0, retryAfterMs ?? 30_000));
+      else if (status === 401 || status === 403) cooldownMs = 30 * 60_000;
+      else if (status >= 500 || status === 0) cooldownMs = 5_000;
       db.prepare('UPDATE provider_keys SET cooldown_until = ? WHERE id = ?').run(now + cooldownMs, keyId);
     },
+    async markKeySucceeded(_providerId: number, keyId: number): Promise<void> {
+      if (keyId <= 0) return;
+      getDb().prepare('UPDATE provider_keys SET fail_count = 0, cooldown_until = 0 WHERE id = ?').run(keyId);
+    },
   };
+}
+
+export function normalizeModelSettings(): void {
+  const providers = listProviders();
+  const enabledProviders = providers.filter((provider) => provider.enabled);
+  const defaultProvider = enabledProviders[0]?.name;
+  if (!defaultProvider) return;
+  const validNames = new Set(enabledProviders.map((provider) => provider.name));
+  const addPrefix = (model: string): string => {
+    const trimmed = model.trim();
+    const slash = trimmed.indexOf('/');
+    if (slash > 0 && validNames.has(trimmed.slice(0, slash))) return trimmed;
+    return trimmed ? `${defaultProvider}/${trimmed}` : trimmed;
+  };
+  const settings = getSettings();
+  const model = addPrefix(settings.model);
+  const fallbackModels = settings.fallback_models.map(addPrefix);
+  if (model !== settings.model || fallbackModels.some((value, index) => value !== settings.fallback_models[index])) {
+    updateSettings({ model, fallback_models: fallbackModels });
+  }
 }
 
 async function defaultProviderName(): Promise<string> {

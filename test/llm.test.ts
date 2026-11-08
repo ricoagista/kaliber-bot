@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { callLlm, pingLlm, type LlmOptions } from '../src/llm.js';
+import { createLlmContext, createProvider } from '../src/providers.js';
+import { freshDb } from './helpers.js';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -136,4 +138,23 @@ test('ping melaporkan latensi dan status', async () => {
   assert.equal(result.ok, true);
   assert.equal(result.model, 'm');
   assert.ok(result.latencyMs >= 0);
+});
+
+test('provider tanpa API key (9router lokal tanpa auth) tetap bisa memanggil LLM via llmContext', async () => {
+  freshDb();
+  createProvider('lokal', 'http://127.0.0.1:20128/v1', 0);
+  const fetchImpl = (async () =>
+    jsonResponse(200, { choices: [{ message: { content: 'halo dari lokal tanpa key' } }] })) as unknown as typeof fetch;
+
+  const result = await callLlm(
+    [{ role: 'user', content: 'halo' }],
+    baseOptions({
+      model: 'lokal/qwen',
+      fallbackModels: [],
+      fetchImpl,
+      llmContext: createLlmContext(),
+    }),
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.content, 'halo dari lokal tanpa key');
 });

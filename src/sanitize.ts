@@ -20,19 +20,52 @@ export function stripThink(text: string): string {
 const INTERNAL_TAG = /<\/?(?:info_kaliber|pesan_user|system|assistant|think)\b[^>]*>/gi;
 
 /**
- * Deteksi pola kredensial dan rahasia yang jelas.
- * Jangan membandingkan jawaban dengan seluruh system prompt karena
- * system prompt juga memuat knowledge base yang memang boleh dijawab.
+ * Deteksi pola kredensial, rahasia, dan kebocoran 8 kata berurutan dari
+ * instruksi system prompt (di luar blok <info_kaliber>).
  */
 const SECRET_PATTERNS: RegExp[] = [
   /\bsk-[A-Za-z0-9_-]{10,}\b/,
+  /\bgsk_[A-Za-z0-9_-]{10,}\b/,
   /\bBearer\s+\S+/i,
   /\bROUTER_KEY\b/,
   /\bADMIN_TOKEN\b/,
+  /\bSECRET_KEY\b/,
+  /\bREVEAL_PASSWORD\b/,
 ];
 
-function leaksPrompt(output: string, _systemPrompt: string): boolean {
-  return SECRET_PATTERNS.some((re) => re.test(output));
+const LEAK_WINDOW = 8;
+
+function wordsOf(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function stripKnowledgeBlock(systemPrompt: string): string {
+  return systemPrompt
+    .replace(/<info_kaliber\b[^>]*>[\s\S]*?<\/info_kaliber>/gi, ' ')
+    .replace(/\{\{KNOWLEDGE\}\}/g, ' ');
+}
+
+function leaksPrompt(output: string, systemPrompt: string): boolean {
+  if (SECRET_PATTERNS.some((re) => re.test(output))) return true;
+  if (!systemPrompt || systemPrompt.trim() === '') return false;
+
+  const promptWords = wordsOf(stripKnowledgeBlock(systemPrompt));
+  const outWords = wordsOf(output);
+  if (promptWords.length < LEAK_WINDOW || outWords.length < LEAK_WINDOW) return false;
+
+  const shingles = new Set<string>();
+  for (let i = 0; i + LEAK_WINDOW <= promptWords.length; i++) {
+    shingles.add(promptWords.slice(i, i + LEAK_WINDOW).join(' '));
+  }
+  for (let i = 0; i + LEAK_WINDOW <= outWords.length; i++) {
+    if (shingles.has(outWords.slice(i, i + LEAK_WINDOW).join(' '))) return true;
+  }
+  return false;
 }
 
 function toWhatsAppMarkdown(text: string): string {
