@@ -28,6 +28,7 @@ import { getSetting, getSettings, isKnownSettingKey, updateSettings } from './se
 import {
   listProviders,
   getProvider,
+  getKey,
   createProvider,
   updateProvider,
   deleteProvider,
@@ -39,10 +40,12 @@ import {
   createLlmContext,
   updateKey,
   type ProviderKeyRow,
+  type ProviderRow,
   type ProviderWithKeys,
 } from './providers.js';
-import { encryptKey, maskKey, decryptKeyCached, hasRevealPassword, verifyRevealPassword } from './crypto.js';
+import { encryptKey, decryptKeyCached, hasRevealPassword, verifyRevealPassword, keyLast4 } from './crypto.js';
 import { endpointCandidates } from './endpoint.js';
+import { getConnInfo } from '@hono/node-server/conninfo';
 
 const env = loadEnv();
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -82,6 +85,9 @@ const STRING_LIMITS: Record<string, number> = {
   log_level: 10,
 };
 
+const PROVIDER_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+const PROVIDER_BASE_URL_RE = /^https?:\/\//;
+
 const BOOLEAN_KEYS = new Set<string>([
   'bot_enabled',
   'private_enabled',
@@ -100,6 +106,14 @@ const NUMBER_RANGES: Record<string, { min: number; max: number; int?: boolean }>
   strike_window_min: { min: 1, max: 1_440, int: true },
   mute_minutes: { min: 1, max: 10_080, int: true },
 };
+
+function validateProviderName(name: string): boolean {
+  return PROVIDER_NAME_RE.test(name);
+}
+
+function validateProviderBaseUrl(baseUrl: string): boolean {
+  return PROVIDER_BASE_URL_RE.test(baseUrl);
+}
 
 const LIST_LIMITS: Record<string, { maxItems: number; maxLen: number }> = {
   allowed_groups: { maxItems: 100, maxLen: 100 },
@@ -185,36 +199,65 @@ const revealFailures = new Map<string, number[]>();
 const REVEAL_FAILURE_WINDOW_MS = 60_000;
 const MAX_REVEAL_FAILURES = 5;
 
-function clientIp(headers: Headers): string {
-  return (
-    headers.get('cf-connecting-ip') ||
-    headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    'local'
-  );
+function clientIp(c: Parameters<typeof getConnInfo>[0], trustProxy = env.trustProxy): string {
+  if (trustProxy) {
+    return c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'local';
+  }
+  const rawEnv = (c as { env?: { incoming?: unknown } }).env;
+  if (rawEnv && typeof rawEnv === 'object' && 'incoming' in rawEnv && rawEnv.incoming) {
+    try {
+      return getConnInfo(c).remote.address || 'local';
+    } catch {
+      return 'local';
+    }
+  }
+  // Fallback saat dijalankan in-memory (app.request di unit test tanpa socket HTTP).
+  return c.req.header('cf-connecting-ip') || 'local';
 }
 
 function tooManyFailures(ip: string, now: number): boolean {
+  pruneFailureMap(loginFailures, now, FAILURE_WINDOW_MS);
   const list = (loginFailures.get(ip) ?? []).filter((ts) => now - ts < FAILURE_WINDOW_MS);
   loginFailures.set(ip, list);
+  if (loginFailures.size > 5000) loginFailures.delete(loginFailures.keys().next().value as string);
   return list.length >= MAX_FAILURES;
 }
 
 function recordFailure(ip: string, now: number): void {
+  pruneFailureMap(loginFailures, now, FAILURE_WINDOW_MS);
   const list = loginFailures.get(ip) ?? [];
   list.push(now);
   loginFailures.set(ip, list);
+  if (loginFailures.size > 5000) loginFailures.delete(loginFailures.keys().next().value as string);
 }
 
 function revealBlocked(ip: string, now: number): boolean {
+  pruneFailureMap(revealFailures, now, REVEAL_FAILURE_WINDOW_MS);
   const list = (revealFailures.get(ip) ?? []).filter((ts) => now - ts < REVEAL_FAILURE_WINDOW_MS);
   revealFailures.set(ip, list);
+  if (revealFailures.size > 5000) revealFailures.delete(revealFailures.keys().next().value as string);
   return list.length >= MAX_REVEAL_FAILURES;
 }
 
 function recordRevealFailure(ip: string, now: number): void {
+  pruneFailureMap(revealFailures, now, REVEAL_FAILURE_WINDOW_MS);
   const list = revealFailures.get(ip) ?? [];
   list.push(now);
   revealFailures.set(ip, list);
+  if (revealFailures.size > 5000) revealFailures.delete(revealFailures.keys().next().value as string);
+}
+
+function pruneFailureMap(map: Map<string, number[]>, now: number, windowMs: number): void {
+  for (const [key, timestamps] of map) {
+    const active = timestamps.filter((ts) => now - ts < windowMs);
+    if (active.length === 0) map.delete(key);
+    else map.set(key, active);
+  }
+  while (map.size > 5000) {
+    const oldest = map.keys().next().value;
+    if (typeof oldest !== 'string') break;
+    map.delete(oldest);
+  }
 }
 
 function tokenMatches(given: string, expected: string): boolean {
@@ -328,33 +371,45 @@ async function fetchProviderModels(provider: ProviderWithKeys): Promise<Provider
   };
 }
 
+function applySecurityHeaders(c: { header: (name: string, value: string) => void }): void {
+  c.header(
+    'Content-Security-Policy',
+    "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'",
+  );
+  c.header('X-Frame-Options', 'DENY');
+  c.header('Referrer-Policy', 'no-referrer');
+  c.header('X-Content-Type-Options', 'nosniff');
+}
+
 export function createApi(deps: ApiDeps): Hono {
+  const runtimeEnv = loadEnv();
   const app = new Hono();
 
-  // Header keamanan untuk semua respons.
+  // Header keamanan untuk semua respons (termasuk error dan 404).
   app.use('*', async (c, next) => {
+    applySecurityHeaders(c);
     await next();
-    c.header(
-      'Content-Security-Policy',
-      "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'",
-    );
-    c.header('X-Frame-Options', 'DENY');
-    c.header('Referrer-Policy', 'no-referrer');
-    c.header('X-Content-Type-Options', 'nosniff');
+    applySecurityHeaders(c);
   });
 
-  app.use('/api/*', bodyLimit({ maxSize: BODY_LIMIT, onError: (c) => c.json({ error: 'body terlalu besar' }, 413) }));
+  app.use('/api/*', bodyLimit({
+    maxSize: BODY_LIMIT,
+    onError: (c) => {
+      applySecurityHeaders(c);
+      return c.json({ error: 'body terlalu besar' }, 413);
+    },
+  }));
 
   // Auth: Bearer token wajib, dibandingkan constant-time.
   app.use('/api/*', async (c, next) => {
     const now = Date.now();
-    const ip = clientIp(c.req.raw.headers);
+    const ip = clientIp(c, runtimeEnv.trustProxy);
     if (tooManyFailures(ip, now)) {
       return c.json({ error: 'terlalu banyak percobaan, coba lagi nanti' }, 429);
     }
     const header = c.req.header('authorization') ?? '';
     const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
-    if (!tokenMatches(token, env.adminToken)) {
+    if (!tokenMatches(token, runtimeEnv.adminToken)) {
       recordFailure(ip, now);
       logger.warn({ ip }, 'login admin gagal');
       return c.json({ error: 'unauthorized' }, 401);
@@ -503,13 +558,12 @@ export function createApi(deps: ApiDeps): Hono {
   app.get('/api/models', async (c) => {
     const providers = listProviders().filter((provider) => provider.enabled);
     const results = await Promise.all(providers.map((provider) => fetchProviderModels(provider)));
-    const multiple = providers.length > 1;
     const models = results.flatMap((result) =>
       result.models.map((model) => ({
         providerId: result.providerId,
         provider: result.provider,
         model,
-        value: multiple ? `${result.provider}/${model}` : model,
+        value: `${result.provider}/${model}`,
       })),
     );
     const errors = results
@@ -539,6 +593,12 @@ export function createApi(deps: ApiDeps): Hono {
     const priority = typeof body.priority === 'number' ? body.priority : 0;
     if (!name) return c.json({ error: 'nama provider wajib diisi' }, 400);
     if (!baseUrl) return c.json({ error: 'base URL wajib diisi' }, 400);
+    if (!validateProviderName(name)) {
+      return c.json({ error: 'nama provider tidak valid. Hanya huruf kecil, angka, garis bawah dan tanda hubung diperbolehkan, maksimal 32 karakter' }, 400);
+    }
+    if (!validateProviderBaseUrl(baseUrl)) {
+      return c.json({ error: 'base URL harus http:// atau https://' }, 400);
+    }
     try {
       const provider = createProvider(name, baseUrl, priority);
       logger.warn({ id: provider.id, name: provider.name }, 'provider ditambahkan');
@@ -554,18 +614,52 @@ export function createApi(deps: ApiDeps): Hono {
     if (!Number.isFinite(id)) return c.json({ error: 'ID tidak valid' }, 400);
     const body = await readJson(c);
     if (!isRecord(body)) return c.json({ error: 'body JSON tidak valid' }, 400);
-    const name = typeof body.name === 'string' ? body.name.trim() : '';
-    const baseUrl = typeof body.baseUrl === 'string' ? body.baseUrl.trim() : '';
-    if (!name) return c.json({ error: 'nama provider wajib diisi' }, 400);
-    if (!baseUrl) return c.json({ error: 'base URL wajib diisi' }, 400);
+    const patch: Partial<{ name: string; baseUrl: string; enabled: boolean; priority: number }> = {};
+    if (body.name !== undefined) {
+      const name = typeof body.name === 'string' ? body.name.trim() : '';
+      if (!name) return c.json({ error: 'nama provider wajib diisi' }, 400);
+      if (!validateProviderName(name)) {
+        return c.json({ error: 'nama provider tidak valid. Hanya huruf kecil, angka, garis bawah dan tanda hubung diperbolehkan, maksimal 32 karakter' }, 400);
+      }
+      patch.name = name;
+    }
+    if (body.baseUrl !== undefined) {
+      const baseUrl = typeof body.baseUrl === 'string' ? body.baseUrl.trim() : '';
+      if (!baseUrl) return c.json({ error: 'base URL wajib diisi' }, 400);
+      if (!validateProviderBaseUrl(baseUrl)) {
+        return c.json({ error: 'base URL harus http:// atau https://' }, 400);
+      }
+      patch.baseUrl = baseUrl;
+    }
+    if (body.enabled !== undefined) {
+      patch.enabled = typeof body.enabled === 'boolean' ? body.enabled : true;
+    }
+    if (body.priority !== undefined) {
+      patch.priority = typeof body.priority === 'number' ? body.priority : 0;
+    }
+    if (Object.keys(patch).length === 0) {
+      return c.json({ error: 'tidak ada field yang diubah' }, 400);
+    }
     try {
-      const provider = updateProvider(id, {
-        name,
-        baseUrl,
-        enabled: typeof body.enabled === 'boolean' ? body.enabled : true,
-        priority: typeof body.priority === 'number' ? body.priority : 0,
-      });
+      const before = getProvider(id);
+      if (!before) return c.json({ error: 'provider tidak ditemukan' }, 404);
+      const provider = updateProvider(id, patch as Partial<Omit<ProviderRow, 'id' | 'createdAt'>>);
       if (!provider) return c.json({ error: 'provider tidak ditemukan' }, 404);
+      if (patch.name && patch.name !== before.name) {
+        const settings = getSettings();
+        const newPrefix = patch.name;
+        const oldPrefix = before.name;
+        const update: Partial<Settings> = {};
+        if (settings.model.startsWith(oldPrefix + '/') || settings.model === oldPrefix) {
+          update.model = settings.model.replace(new RegExp('^' + oldPrefix + '(/?)'), newPrefix + '$1');
+        }
+        if (Array.isArray(settings.fallback_models) && settings.fallback_models.length > 0) {
+          update.fallback_models = settings.fallback_models.map((fbModel) =>
+            fbModel.startsWith(oldPrefix + '/') ? fbModel.replace(new RegExp('^' + oldPrefix + '(/?)'), newPrefix + '$1') : fbModel,
+          );
+        }
+        if (Object.keys(update).length > 0) updateSettings(update);
+      }
       logger.warn({ id }, 'provider diperbarui');
       return c.json({ ok: true, provider });
     } catch (err) {
@@ -639,7 +733,7 @@ export function createApi(deps: ApiDeps): Hono {
     if (!provider) return c.json({ error: 'provider tidak ditemukan' }, 400);
     try {
       const encrypted = encryptKey(apiKey);
-      const key = addKey(provider.id, label, encrypted, maskKey(apiKey));
+      const key = addKey(provider.id, label, encrypted, keyLast4(apiKey));
       if (!key) return c.json({ error: 'gagal menambahkan key' }, 500);
       logger.warn({ keyId: key.id, providerId: provider.id }, 'key ditambahkan');
       return c.json({ ok: true, key: publicKey(key) }, 201);
@@ -653,24 +747,44 @@ export function createApi(deps: ApiDeps): Hono {
     const providerId = Number.parseInt(c.req.param('providerId'), 10);
     const keyId = Number.parseInt(c.req.param('keyId'), 10);
     if (!Number.isFinite(providerId) || !Number.isFinite(keyId)) return c.json({ error: 'ID tidak valid' }, 400);
+    const existing = getKey(keyId);
+    if (!existing || existing.providerId !== providerId) return c.json({ error: 'key tidak ditemukan' }, 404);
     const body = await readJson(c);
     if (!isRecord(body)) return c.json({ error: 'body JSON tidak valid' }, 400);
-    const key = updateKey(keyId, body as Partial<{ label: string; enabled: boolean }>);
+    const patch: Partial<{ label: string; enabled: boolean }> = {};
+    if (body.label !== undefined) {
+      if (typeof body.label !== 'string' || !body.label.trim()) return c.json({ error: 'label harus teks tidak kosong' }, 400);
+      patch.label = body.label.trim();
+    }
+    if (body.enabled !== undefined) {
+      if (typeof body.enabled !== 'boolean') return c.json({ error: 'enabled harus boolean' }, 400);
+      patch.enabled = body.enabled;
+    }
+    if (Object.keys(patch).length === 0) {
+      return c.json({ error: 'tidak ada field yang diubah' }, 400);
+    }
+    const key = updateKey(keyId, patch);
     if (!key) return c.json({ error: 'key tidak ditemukan' }, 404);
     return c.json({ ok: true, key: publicKey(key) });
   });
 
   app.delete('/api/providers/:providerId/keys/:keyId', async (c) => {
+    const providerId = Number.parseInt(c.req.param('providerId'), 10);
     const keyId = Number.parseInt(c.req.param('keyId'), 10);
-    if (!Number.isFinite(keyId)) return c.json({ error: 'ID tidak valid' }, 400);
+    if (!Number.isFinite(providerId) || !Number.isFinite(keyId)) return c.json({ error: 'ID tidak valid' }, 400);
+    const existing = getKey(keyId);
+    if (!existing || existing.providerId !== providerId) return c.json({ error: 'key tidak ditemukan' }, 404);
     const ok = deleteKey(keyId);
     if (!ok) return c.json({ error: 'key tidak ditemukan' }, 404);
     return c.json({ ok: true });
   });
 
   app.post('/api/providers/:id/keys/:keyId/toggle', async (c) => {
+    const providerId = Number.parseInt(c.req.param('id'), 10);
     const keyId = Number.parseInt(c.req.param('keyId'), 10);
-    if (!Number.isFinite(keyId)) return c.json({ error: 'ID tidak valid' }, 400);
+    if (!Number.isFinite(providerId) || !Number.isFinite(keyId)) return c.json({ error: 'ID tidak valid' }, 400);
+    const existing = getKey(keyId);
+    if (!existing || existing.providerId !== providerId) return c.json({ error: 'key tidak ditemukan' }, 404);
     const body = await readJson(c);
     if (!isRecord(body)) return c.json({ error: 'body JSON tidak valid' }, 400);
     const enabled = typeof body?.enabled === 'boolean' ? body.enabled : true;
@@ -684,8 +798,10 @@ export function createApi(deps: ApiDeps): Hono {
     if (!isRecord(body)) return c.json({ error: 'body JSON tidak valid' }, 400);
     const baseUrl = typeof body.baseUrl === 'string' ? body.baseUrl.trim() : '';
     const apiKey = typeof body.apiKey === 'string' ? body.apiKey : '';
-    const model = typeof body.model === 'string' ? body.model.trim() : 'ping';
     if (!baseUrl) return c.json({ error: 'base URL wajib diisi' }, 400);
+    if (!validateProviderBaseUrl(baseUrl)) {
+      return c.json({ error: 'base URL harus http:// atau https://' }, 400);
+    }
     const url = `${baseUrl.replace(/\/+$/, '')}/models`;
     try {
       const headers: Record<string, string> = {};
@@ -701,15 +817,15 @@ export function createApi(deps: ApiDeps): Hono {
       try {
         const parsed = JSON.parse(text);
         if (parsed.data && Array.isArray(parsed.data)) {
-          models = parsed.data.map((m: any) => typeof m.id === 'string' ? m.id : '').filter(Boolean);
+          models = parsed.data.map((m: { id?: unknown }) => (typeof m?.id === 'string' ? m.id : '')).filter(Boolean);
         }
       } catch {
         // ignore parse errors
       }
       if (!ok) return c.json({ ok: false, error: `HTTP ${response.status}`, models });
       return c.json({ ok: true, models });
-    } catch (err) {
-      return c.json({ ok: false, error: err instanceof Error ? err.message : 'gagal tes koneksi' }, 409);
+    } catch {
+      return c.json({ ok: false, error: 'gagal tes koneksi ke provider' }, 409);
     }
   });
 
@@ -731,7 +847,7 @@ export function createApi(deps: ApiDeps): Hono {
     if (!Number.isFinite(keyId)) return c.json({ error: 'ID tidak valid' }, 400);
 
     const now = Date.now();
-    const ip = clientIp(c.req.raw.headers);
+    const ip = clientIp(c, runtimeEnv.trustProxy);
     const audit = (success: boolean, result: string): void => {
       try {
         insertAudit({ ts: now, keyId, success, ip, result });
@@ -755,6 +871,11 @@ export function createApi(deps: ApiDeps): Hono {
       recordRevealFailure(ip, now);
       audit(false, 'no_password');
       return c.json({ error: 'password wajib diisi' }, 400);
+    }
+    if (password.length > 256) {
+      recordRevealFailure(ip, now);
+      audit(false, 'bad_request');
+      return c.json({ error: 'password terlalu panjang' }, 400);
     }
 
     if (!hasRevealPassword()) {
@@ -790,8 +911,14 @@ export function createApi(deps: ApiDeps): Hono {
     c.header('Cache-Control', 'no-store');
     return c.json({ ok: true, keyId: keyRow.id, label: keyRow.label, plainKey });
   });
+  app.notFound((c) => {
+    applySecurityHeaders(c);
+    return c.json({ error: 'not found' }, 404);
+  });
+
   app.onError((err, c) => {
     logger.error({ err }, 'error API');
+    applySecurityHeaders(c);
     return c.json({ error: 'internal error' }, 500);
   });
 

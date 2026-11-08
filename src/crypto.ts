@@ -147,15 +147,17 @@ export function hashPassword(password: string): string {
   return `${salt.toString('base64')}:${hash.toString('base64')}`;
 }
 
-/** Bandingkan constant-time. */
+/** Bandingkan constant-time; batasi panjang password agar scrypt tidak membebani CPU. */
 export function verifyPassword(password: string, stored: string): boolean {
+  if (!password || password.length > 256) return false;
   const parts = stored.split(':');
   if (parts.length !== 2) return false;
   try {
     const salt = Buffer.from(parts[0]!, 'base64');
     const expected = Buffer.from(parts[1]!, 'base64');
+    if (salt.length !== SALT_LENGTH || expected.length !== KEY_LENGTH) return false;
     const actual = scryptSync(password, salt, KEY_LENGTH);
-    return timingSafeEqual(actual, expected);
+    return actual.length === expected.length && timingSafeEqual(actual, expected);
   } catch {
     return false;
   }

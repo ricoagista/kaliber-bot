@@ -1754,7 +1754,7 @@
     $('#botSwitch').checked = Boolean(s.bot && s.bot.enabled);
 
     var img = $('#qrImage');
-    if (wa.qrDataUrl) {
+    if (typeof wa.qrDataUrl === 'string' && wa.qrDataUrl.indexOf('data:image/') === 0) {
       img.src = wa.qrDataUrl;
       img.classList.remove('hidden');
       $('#qrHint').textContent = 'Scan dengan WhatsApp > Perangkat tertaut.';
