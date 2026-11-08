@@ -520,9 +520,28 @@ export function buildModelPlan(settings: Settings, opts?: { advance?: boolean })
 /**
  * Sekali saat start: untuk provider yang kolom model-nya masih kosong, isi dari
  * settings.model atau settings.fallback_models yang berawalan `<nama>/`.
+ * Bila DEFAULT_MODEL di .env dikosongkan sehingga settings.model kosong,
+ * bersihkan juga model hasil backfill lama pada provider default.
  */
-export function backfillProviderModels(): void {
+export function backfillProviderModels(defaultModelFromEnv = ''): void {
+  const db = getDb();
+  const flagRow = db
+    .prepare("SELECT value FROM settings WHERE key = '_provider_model_backfilled'")
+    .get() as { value: string } | undefined;
+
   const settings = getSettings();
+  if (defaultModelFromEnv.trim() === '' && settings.model.trim() === '') {
+    // Jika DEFAULT_MODEL di .env dimatikan dan settings.model kosong,
+    // pastikan provider 'default' hasil seed awal tidak menyimpan model sisa.
+    db.prepare("UPDATE providers SET model = '' WHERE name = 'default' AND model != ''").run();
+  }
+
+  if (flagRow) return;
+  db.prepare(
+    "INSERT INTO settings (key, value, updated_at) VALUES ('_provider_model_backfilled', 'true', ?) " +
+      "ON CONFLICT(key) DO UPDATE SET value = 'true', updated_at = excluded.updated_at",
+  ).run(Date.now());
+
   const sources = [settings.model, ...(settings.fallback_models ?? [])]
     .map((item) => (typeof item === 'string' ? item.trim() : ''))
     .filter(Boolean);
@@ -557,7 +576,7 @@ export function normalizeModelSettings(): void {
   const model = addPrefix(settings.model);
   const fallbackModels = settings.fallback_models.map(addPrefix);
   if (model !== settings.model || fallbackModels.some((value, index) => value !== settings.fallback_models[index])) {
-    updateSettings({ model, fallback_models: fallbackModels });
+    updateSettings({ model, fallback_models: fallbackModels }, { internal: true });
   }
 }
 

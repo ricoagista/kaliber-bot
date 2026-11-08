@@ -304,13 +304,19 @@ function tokenMatches(given: string, expected: string): boolean {
   return timingSafeEqual(givenHash, expectedHash);
 }
 
-function findIndexHtml(): string | null {
+function findPublicFile(filename: string): string | null {
   const candidates = [
-    path.resolve('public', 'index.html'),
-    path.resolve(here, '..', 'public', 'index.html'),
-    path.resolve(here, '..', '..', 'public', 'index.html'),
+    path.resolve('public', filename),
+    path.resolve(here, '..', 'public', filename),
+    path.resolve(here, '..', '..', 'public', filename),
+    path.resolve(filename),
+    path.resolve(here, '..', filename),
   ];
   return candidates.find((candidate) => existsSync(candidate)) ?? null;
+}
+
+function findIndexHtml(): string | null {
+  return findPublicFile('index.html');
 }
 
 async function readJson(c: { req: { json: () => Promise<unknown> } }): Promise<unknown | null> {
@@ -405,7 +411,7 @@ async function fetchProviderModels(provider: ProviderWithKeys): Promise<Provider
     providerId: provider.id,
     provider: provider.name,
     models: [],
-    error: 'HTTP 404 — endpoint /models tidak ditemukan. Coba tambahkan /v1 pada Base URL.',
+    error: 'HTTP 404: endpoint /models tidak ditemukan. Coba tambahkan /v1 pada Base URL.',
   };
 }
 
@@ -473,6 +479,14 @@ export function createApi(deps: ApiDeps): Hono {
   });
 
   app.get('/index.html', (c) => c.redirect('/'));
+
+  app.get('/kaliber.avif', (c) => {
+    const file = findPublicFile('kaliber.avif');
+    if (!file) return c.text('kaliber.avif tidak ditemukan', 404);
+    c.header('content-type', 'image/avif');
+    c.header('cache-control', 'public, max-age=86400');
+    return c.body(new Uint8Array(readFileSync(file)));
+  });
 
   app.get('/api/settings', (c) => {
     return c.json({

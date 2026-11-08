@@ -13,6 +13,9 @@ function persist(key: string, value: unknown, updatedAt: number): void {
     .run(key, JSON.stringify(value), updatedAt);
 }
 
+const SEEDED_MODEL_META_KEY = '_seeded_default_model';
+const WEB_MODEL_MARKER = '__web__';
+
 /**
  * Muat settings dari SQLite. Key yang belum ada diisi dari default (env hanya
  * dipakai untuk seed pertama), knowledge diisi template saat masih kosong.
@@ -57,11 +60,28 @@ export function initSettings(defaultModel = '', defaultLogLevel = ''): void {
     }
   }
 
-  // Model awal dari env bila belum diatur lewat web.
-  const model = cache.get('model');
-  if ((typeof model !== 'string' || model.trim() === '') && defaultModel.trim() !== '') {
-    cache.set('model', defaultModel);
-    persist('model', defaultModel, now);
+  // Sinkronisasi DEFAULT_MODEL dari .env:
+  // - Bila DEFAULT_MODEL di .env dikosongkan/dimatikan dan nilai model di DB
+  //   bukan hasil simpan manual dari web, kosongkan kembali model di DB.
+  // - Bila DEFAULT_MODEL diisi dan model masih kosong, gunakan sebagai seed awal.
+  const trimmedDefaultModel = defaultModel.trim();
+  const prevSeedMarker = stored.get(SEEDED_MODEL_META_KEY);
+  const currentModel = typeof cache.get('model') === 'string' ? (cache.get('model') as string).trim() : '';
+
+  if (trimmedDefaultModel === '') {
+    if (prevSeedMarker !== WEB_MODEL_MARKER && currentModel !== '') {
+      cache.set('model', '');
+      persist('model', '', now);
+    }
+    if (prevSeedMarker !== WEB_MODEL_MARKER) {
+      persist(SEEDED_MODEL_META_KEY, '', now);
+    }
+  } else if (currentModel === '') {
+    cache.set('model', trimmedDefaultModel);
+    persist('model', trimmedDefaultModel, now);
+    persist(SEEDED_MODEL_META_KEY, trimmedDefaultModel, now);
+  } else if (prevSeedMarker === undefined) {
+    persist(SEEDED_MODEL_META_KEY, trimmedDefaultModel, now);
   }
 
   applyLogLevel(cache.get('log_level'));
@@ -88,7 +108,7 @@ export function getSettings(): Settings {
 }
 
 /** Simpan patch settings secara atomik; cache langsung diperbarui (tanpa restart). */
-export function updateSettings(patch: Partial<Settings>): void {
+export function updateSettings(patch: Partial<Settings>, options?: { internal?: boolean }): void {
   const entries = Object.entries(patch).filter(([key]) => isKnownSettingKey(key)) as Array<
     [keyof Settings, unknown]
   >;
@@ -100,6 +120,10 @@ export function updateSettings(patch: Partial<Settings>): void {
   try {
     for (const [key, value] of entries) {
       persist(key, value, now);
+      if (!options?.internal && key === 'model') {
+        const strVal = typeof value === 'string' ? value.trim() : '';
+        persist(SEEDED_MODEL_META_KEY, strVal ? WEB_MODEL_MARKER : '', now);
+      }
     }
     db.exec('COMMIT');
   } catch (err) {

@@ -27,20 +27,18 @@ function main(): void {
   initSettings(env.defaultModel, env.logLevel);
   pruneStorage();
 
-  // Seed default provider dari env jika tabel providers masih kosong
+  // Seed default provider dari env hanya jika tabel providers masih kosong dan ROUTER_URL diisi di .env
   const providerCount = getDb().prepare('SELECT COUNT(*) AS n FROM providers').get() as { n: number };
-  const routerUrl = env.routerUrl || 'http://host.containers.internal:20128/v1';
+  const routerUrl = env.routerUrl;
   const routerKey = env.routerKey || '';
-  if (providerCount.n === 0) {
-    if (routerUrl) {
-      const provider = createProvider('default', routerUrl, 0);
-      if (routerKey && routerKey.trim()) {
-        const encrypted = encryptKey(routerKey);
-        addKey(provider.id, 'primary', encrypted, keyLast4(routerKey));
-      }
+  if (providerCount.n === 0 && routerUrl) {
+    const provider = createProvider('default', routerUrl, 0, env.defaultModel);
+    if (routerKey && routerKey.trim()) {
+      const encrypted = encryptKey(routerKey);
+      addKey(provider.id, 'primary', encrypted, keyLast4(routerKey));
     }
   }
-  backfillProviderModels();
+  backfillProviderModels(env.defaultModel);
   normalizeModelSettings();
 
   // Migrasi format enkripsi lama + hangatkan cache key sekali saat start.
